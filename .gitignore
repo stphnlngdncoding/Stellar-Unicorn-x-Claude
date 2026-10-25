@@ -1,0 +1,9 @@
+board/secrets.py
+board/_cloud.json
+cloud/.dev.vars
+cloud/connector-url.txt
+cloud/deploy.log
+node_modules/
+.wrangler/
+__pycache__/
+.DS_Store
