@@ -240,12 +240,13 @@ Since v6, the board recovers from freezes and network trouble without anyone tou
 
 ## Versions and rolling back
 
-Every release is a git tag (`v5.0.0`, `v6.0.0`, …), and [CHANGELOG.md](CHANGELOG.md) lists what changed in each. The major version number matches `VERSION` in `board/main.py`, which the board reports in `get_board_status`.
+Every release gets a branch named `release/vX.Y.Z` (`release/v5.0.0`, `release/v6.0.0`, …) pointing at the exact code that shipped, and [CHANGELOG.md](CHANGELOG.md) lists what changed in each. `main` is always the latest release. The major version number matches `VERSION` in `board/main.py`, which the board reports in `get_board_status`.
 
 To roll the board back to an earlier release:
 
 ```bash
-git checkout v5.0.0 -- board/      # restores that release's board files
+git fetch origin
+git checkout origin/release/v5.0.0 -- board/     # restores that release's board files
 ```
 
 Then copy them to the board, either over USB with Thonny, or by asking Claude to install that version through the connector (see below). When rolling back from v6 to v5, also delete `boot.py` and `_wd.py` from the board.

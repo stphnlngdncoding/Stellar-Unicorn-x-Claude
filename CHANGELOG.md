@@ -1,6 +1,7 @@
 # Changelog
 
-Releases are git tags (`vMAJOR.MINOR.PATCH`). The major number matches the
+Each release has a branch `release/vMAJOR.MINOR.PATCH` pointing at the code that
+shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
