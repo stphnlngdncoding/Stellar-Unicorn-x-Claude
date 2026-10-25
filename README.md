@@ -224,6 +224,7 @@ The launcher (v5 and later) recovers on its own:
 1. It runs `gc.collect()` before every check-in.
 2. If a check-in fails with ENOMEM, it **pauses the animation** (the last frame stays on screen) and retries a moment later, so the program isn't allocating while the connection is being set up.
 3. After three ENOMEM failures in a row, it **stops the program** to free its memory, reconnects, then **restarts the same program** automatically.
+4. If it's still out of memory 20 seconds after the first failure (failed connections leak memory that only a restart frees), it **restarts the board** and resumes the same program (v6.1+).
 
 When writing your own programs, you can help by creating pens and lists in `setup()` and reusing them rather than allocating new ones every frame.
 

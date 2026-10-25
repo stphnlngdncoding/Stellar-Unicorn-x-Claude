@@ -5,6 +5,15 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.1.0 (2026-10-25)
+
+Fixes the board freezing (screen stuck, offline) while the Game of Life runs.
+
+- **Clean restart when memory can't be recovered.** Each failed secure connection leaks memory that only a restart frees, so pausing and parking the program weren't enough. If the board is still out of memory 20 seconds after the first failure, it restarts and resumes the same program.
+- Parking a program for memory no longer forgets it, so it's the one that resumes.
+- **Memory-friendly Game of Life.** `life.py` allocates all buffers once and reuses them (double-buffered grid, precomputed neighbours, a precomputed pen table) instead of creating new lists, tuples and pens every frame, so it no longer fragments the heap.
+- The board reports `"version": "6.1"`.
+
 ## v6.0.0 (2026-10-25)
 
 Self-healing board.

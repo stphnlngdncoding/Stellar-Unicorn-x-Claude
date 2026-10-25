@@ -9,6 +9,10 @@
 #   2  Age       - newborns and old-timers get very different colours
 # Every cell is born white and ripens into its colour as it ages. Cells fade
 # in and out smoothly, the edges wrap, and a stuck or empty world reseeds.
+#
+# Memory-friendly: all buffers are allocated once in setup() and reused, and
+# colours come from a precomputed pen table, so the board's heap stays calm
+# (that leaves room for the launcher's secure cloud connection).
 import random
 from stellar import StellarUnicorn
 
@@ -26,28 +30,75 @@ AGE_SPREAD = 0.6     # style 2: colour difference between young and old cells
 RIPEN = 8            # generations a newborn takes to go from white to full colour
 MAX_SATURATION = 0.85
 
-GLIDER = [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)]
+HUES = 48            # pen table resolution
+SATS = 6
+VALS = 8
+HISTORY = 12
 
-def hsv(g, h, s=1.0, v=1.0):
+GLIDER = ((1, 0), (2, 1), (0, 2), (1, 2), (2, 2))
+
+def rgb(h, s, v):
     i = int(h * 6)
     f = h * 6 - i
     p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
-    r, gg, b = [(v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q)][i % 6]
-    return g.create_pen(int(r * 255), int(gg * 255), int(b * 255))
+    r, gg, b = ((v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q))[i % 6]
+    return int(r * 255), int(gg * 255), int(b * 255)
+
+def setup(su, g):
+    global W, H, N, BLACK, PENS, alive, nxt, age, gene, new_gene, glow, shown, sat
+    global hist, hist_n, nbrs, prev, style, drift, paused, stale, generation, next_step
+    W, H = su.WIDTH, su.HEIGHT
+    N = W * H
+    BLACK = g.create_pen(0, 0, 0)
+    # pens for every (hue, saturation, brightness) step, made once
+    PENS = []
+    for hi in range(HUES):
+        for si in range(SATS):
+            for vi in range(VALS):
+                PENS.append(g.create_pen(*rgb(hi / HUES, si / (SATS - 1) * MAX_SATURATION, (vi + 1) / VALS)))
+    alive = bytearray(N)
+    nxt = bytearray(N)
+    age = bytearray(N)
+    gene = [0.0] * N
+    new_gene = [0.0] * N
+    glow = [0.0] * N
+    shown = [0.0] * N
+    sat = [0.0] * N
+    hist = [bytearray(N) for _ in range(HISTORY)]
+    hist_n = 0
+    # the 8 neighbour indices of every cell (edges wrap), computed once
+    nbrs = []
+    for y in range(H):
+        for x in range(W):
+            nbrs.append(tuple(((y + dy) % H) * W + (x + dx) % W
+                              for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dx or dy))
+    prev = [False, False, False, False]
+    style = COLOR_STYLE
+    drift = 0.0
+    paused = False
+    stale = 0
+    generation = 0
+    next_step = STEP_SECONDS
+    seed()
 
 def seed():
-    global stale, generation
-    centres = [(random.randrange(W), random.randrange(H), random.random())
-               for _ in range(TRIBES)]
+    global stale, generation, hist_n
+    centres = [(random.randrange(W), random.randrange(H), random.random()) for _ in range(TRIBES)]
     for y in range(H):
         for x in range(W):
             i = y * W + x
-            best = min(centres, key=lambda c: (c[0] - x) ** 2 + (c[1] - y) ** 2)
-            gene[i] = best[2]
-            alive[i] = 1 if random.random() < DENSITY else 0
-            age[i] = 1 if alive[i] else 0
+            best = 0
+            bd = 999
+            for c in centres:
+                d = (c[0] - x) ** 2 + (c[1] - y) ** 2
+                if d < bd:
+                    bd, best = d, c[2]
+            gene[i] = best
+            a = 1 if random.random() < DENSITY else 0
+            alive[i] = a
+            age[i] = a
             sat[i] = 0.0
-    del history[:]
+    hist_n = 0
     stale = 0
     generation = 0
 
@@ -62,85 +113,65 @@ def add_glider():
         sat[i] = 0.0
 
 def step():
-    new = bytearray(N)
-    new_gene = gene[:]
-    for y in range(H):
-        for x in range(W):
-            parents = []
-            for dy in (-1, 0, 1):
-                row = ((y + dy) % H) * W
-                for dx in (-1, 0, 1):
-                    if dx or dy:
-                        j = row + (x + dx) % W
-                        if alive[j]:
-                            parents.append(j)
-            n = len(parents)
-            i = y * W + x
-            if alive[i]:
-                new[i] = 1 if n == 2 or n == 3 else 0
-            elif n == 3:
-                new[i] = 1
-                parent = random.choice(parents)
-                new_gene[i] = (gene[parent] + random.uniform(-MUTATION, MUTATION)) % 1
+    global alive, nxt, gene, new_gene
     for i in range(N):
-        if new[i]:
+        n = 0
+        for j in nbrs[i]:
+            n += alive[j]
+        if alive[i]:
+            nxt[i] = 1 if n == 2 or n == 3 else 0
+            new_gene[i] = gene[i]
+        elif n == 3:
+            nxt[i] = 1
+            # inherit from a random live neighbour
+            k = random.randrange(3)
+            for j in nbrs[i]:
+                if alive[j]:
+                    if k == 0:
+                        new_gene[i] = (gene[j] + random.uniform(-MUTATION, MUTATION)) % 1
+                        break
+                    k -= 1
+        else:
+            nxt[i] = 0
+            new_gene[i] = gene[i]
+    for i in range(N):
+        if nxt[i]:
             if alive[i]:
-                age[i] = min(age[i] + 1, 255)
+                if age[i] < 255:
+                    age[i] += 1
             else:
                 age[i] = 1
                 sat[i] = 0.0
         else:
             age[i] = 0
-    alive[:] = new
-    gene[:] = new_gene
+    alive, nxt = nxt, alive          # swap buffers, no new allocation
+    gene, new_gene = new_gene, gene
 
 def is_repeating():
-    state = bytes(alive)
-    if state in history:
-        return True
-    history.append(state)
-    if len(history) > 12:
-        history.pop(0)
+    global hist_n
+    for k in range(min(hist_n, HISTORY)):
+        if hist[k] == alive:
+            return True
+    hist[hist_n % HISTORY][:] = alive
+    hist_n += 1
     return False
 
-def pressed_once(su, switch):
+def pressed_once(su, k, switch):
     now = su.is_pressed(switch)
-    was = prev.get(switch, False)
-    prev[switch] = now
+    was = prev[k]
+    prev[k] = now
     return now and not was
-
-def setup(su, g):
-    global W, H, N, BLACK, alive, age, gene, glow, shown, sat, history, prev
-    global style, drift, paused, stale, generation, next_step
-    W, H = su.WIDTH, su.HEIGHT
-    N = W * H
-    BLACK = g.create_pen(0, 0, 0)
-    alive = bytearray(N)
-    age = bytearray(N)
-    gene = [0.0] * N
-    glow = [0.0] * N
-    shown = [0.5] * N
-    sat = [0.0] * N
-    history = []
-    prev = {}
-    style = COLOR_STYLE
-    drift = 0.0
-    paused = False
-    stale = 0
-    generation = 0
-    next_step = STEP_SECONDS
-    seed()
 
 def frame(su, g, t):
     global style, drift, paused, stale, generation, next_step
 
-    if pressed_once(su, StellarUnicorn.SWITCH_A):
+    if pressed_once(su, 0, StellarUnicorn.SWITCH_A):
         seed()
-    if pressed_once(su, StellarUnicorn.SWITCH_B):
+    if pressed_once(su, 1, StellarUnicorn.SWITCH_B):
         add_glider()
-    if pressed_once(su, StellarUnicorn.SWITCH_C):
+    if pressed_once(su, 2, StellarUnicorn.SWITCH_C):
         paused = not paused
-    if pressed_once(su, StellarUnicorn.SWITCH_D):
+    if pressed_once(su, 3, StellarUnicorn.SWITCH_D):
         style = (style + 1) % 3
 
     if t >= next_step:
@@ -157,22 +188,25 @@ def frame(su, g, t):
     g.set_pen(BLACK)
     g.clear()
     for i in range(N):
-        x, y = i % W, i // W
         if alive[i]:
             if style == 0:
                 h = gene[i]
             elif style == 1:
-                h = (x + y) / (W + H) * RAINBOW_SPREAD
+                h = ((i % W) + (i // W)) / (W + H) * RAINBOW_SPREAD
             else:
-                h = min(age[i], 30) / 30 * AGE_SPREAD
+                a = age[i] if age[i] < 30 else 30
+                h = a / 30 * AGE_SPREAD
             shown[i] = (h + drift) % 1
-            target = 1.0
-            target_sat = min(age[i], RIPEN) / RIPEN * MAX_SATURATION
-            sat[i] += (target_sat - sat[i]) * FADE
+            a = age[i] if age[i] < RIPEN else RIPEN
+            sat[i] += (a / RIPEN - sat[i]) * FADE
+            glow[i] += (1.0 - glow[i]) * FADE
         else:
-            target = 0.0
-        glow[i] += (target - glow[i]) * FADE
-        if glow[i] > 0.01:
-            g.set_pen(hsv(g, shown[i], sat[i], glow[i]))
-            g.pixel(x, y)
-    return 0.02
+            glow[i] -= glow[i] * FADE
+        v = glow[i]
+        if v > 0.06:
+            pen = PENS[(int(shown[i] * HUES) % HUES) * SATS * VALS
+                       + int(sat[i] * (SATS - 1) + 0.5) * VALS
+                       + min(VALS - 1, int(v * VALS))]
+            g.set_pen(pen)
+            g.pixel(i % W, i // W)
+    return 0.03

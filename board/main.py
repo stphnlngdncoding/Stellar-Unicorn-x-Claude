@@ -1,4 +1,4 @@
-# Stellar Unicorn launcher v6 (long-polling cloud, low-memory recovery, watchdog + Wi-Fi self-healing)
+# Stellar Unicorn launcher v6.1 (long-polling cloud, low-memory recovery, watchdog + Wi-Fi self-healing)
 #
 # Keeps a small web server running on your Wi-Fi *while* programs play, so a
 # new program can be sent and started at any time, no button presses needed.
@@ -25,7 +25,8 @@
 
 import os, sys, time, gc, json, machine, micropython
 
-VERSION = 6
+VERSION = "6.1"
+MEM_RESET_S = 20                # still out of memory this long -> clean restart
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
 SELF_RESET = "_self_reset"       # set just before a deliberate self-heal restart
 CLOUD_SILENT_S = 300             # no cloud contact this long (Wi-Fi up) -> restart
@@ -213,10 +214,11 @@ def launcher():
         print("Running", name)
         return None
 
-    def stop_program():
+    def stop_program(keep_resume=False):
         st["env"] = None
         st["name"] = None
-        remove(RESUME_FILE)
+        if not keep_resume:
+            remove(RESUME_FILE)
         st["msg"], st["colour"] = (st["ip"] or "No WiFi"), (0, 220, 255)
 
     # ---------- display loop ----------
@@ -595,6 +597,7 @@ def launcher():
         results = []
         failures = 0
         mem_failures = 0
+        mem_since = 0         # when the current run of out-of-memory failures started
         parked = None         # program stopped to free memory, restarted once connected
         use_blocking = False
         while True:
@@ -637,12 +640,21 @@ def launcher():
                 if isinstance(e, OSError) and e.args and e.args[0] == 12:
                     # out of memory for the secure connection: pause the animation,
                     # and if that isn't enough, stop the program until we're connected
+                    if mem_failures == 0:
+                        mem_since = time.ticks_ms()
                     mem_failures += 1
                     st["hold"] = True
                     if mem_failures >= 3 and st["name"]:
                         parked = st["name"]
-                        stop_program()
+                        stop_program(keep_resume=True)
                         print("Stopped", parked, "to free memory; will restart it")
+                    if time.ticks_diff(time.ticks_ms(), mem_since) > MEM_RESET_S * 1000:
+                        # failed connections leak memory that only a restart frees;
+                        # restart cleanly and resume whatever was playing
+                        print("Still out of memory; restarting")
+                        write(SELF_RESET, "1")
+                        await asyncio.sleep(0.1)
+                        machine.reset()
                     delay = 0.3
                 else:
                     failures += 1
