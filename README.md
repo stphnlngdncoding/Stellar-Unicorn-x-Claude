@@ -39,9 +39,10 @@ board/
   main.py            # launcher: runs programs, LAN web UI, cloud check-in
   secrets.example.py # copy to secrets.py and add your Wi-Fi details
   cloud.example.json # copy to _cloud.json and add your Worker URL + board token
-  programs/          # example programs (life.py, rainbow.py, ...)
+  programs/          # example programs (life, lava lamp, fractal, warp, ...)
 cloud/
   src/worker.js      # Cloudflare Worker + Durable Object + MCP server
+  setup.sh           # one-command deploy: generates secrets, writes board/_cloud.json
   wrangler.toml
   package.json
 ```
@@ -53,10 +54,25 @@ board/secrets.py
 board/_cloud.json
 cloud/.dev.vars
 cloud/connector-url.txt
+cloud/deploy.log
 node_modules/
+.wrangler/
 ```
 
+(The included `.gitignore` already does this.)
+
 ## Setup
+
+### Quick path
+
+```bash
+cd cloud
+bash setup.sh
+```
+
+This generates both secrets, deploys the Worker, stores the secrets in Cloudflare, writes `board/_cloud.json` and prints your connector URL. Then do [step 3](#3-set-up-the-board) (skip creating `_cloud.json`) and [step 4](#4-add-the-connector-to-claude).
+
+The manual steps below do the same thing.
 
 ### 1. Generate two secrets
 
@@ -196,6 +212,18 @@ Rules:
 | The board shows up as a drive called `RPI-RP2` / `RP2350` | It's in bootloader mode. Unplug and replug it without holding any buttons |
 
 **Deploying Worker changes:** a Durable Object can keep running its old code after `wrangler deploy` while the board keeps it busy. If a change doesn't seem to take effect, rename the object in `worker.js` (for example, `idFromName("board")` → `idFromName("board-v2")`) and deploy again. Only transient state is lost.
+
+## Low-memory recovery
+
+The Pico has a few hundred KB of RAM, and opening a secure connection to the cloud needs a sizable block of it. A program that allocates a lot while it runs (the Game of Life, for example) can fragment memory until the TLS handshake fails with `OSError(12)` (ENOMEM). If nothing handled that, the board would drop offline until it was power-cycled.
+
+The launcher (v5 and later) recovers on its own:
+
+1. It runs `gc.collect()` before every check-in.
+2. If a check-in fails with ENOMEM, it **pauses the animation** (the last frame stays on screen) and retries a moment later, so the program isn't allocating while the connection is being set up.
+3. After three ENOMEM failures in a row, it **stops the program** to free its memory, reconnects, then **restarts the same program** automatically.
+
+When writing your own programs, you can help by creating pens and lists in `setup()` and reusing them rather than allocating new ones every frame.
 
 ## Updating the launcher
 
