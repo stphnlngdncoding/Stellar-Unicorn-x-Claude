@@ -1,4 +1,4 @@
-# Stellar Unicorn launcher v5 (long-polling cloud check-in, low-memory recovery)
+# Stellar Unicorn launcher v6 (long-polling cloud, low-memory recovery, watchdog + Wi-Fi self-healing)
 #
 # Keeps a small web server running on your Wi-Fi *while* programs play, so a
 # new program can be sent and started at any time, no button presses needed.
@@ -25,7 +25,10 @@
 
 import os, sys, time, gc, json, machine, micropython
 
-VERSION = 5
+VERSION = 6
+RESUME_FILE = "_resume"          # program to resume after a self-heal restart
+SELF_RESET = "_self_reset"       # set just before a deliberate self-heal restart
+CLOUD_SILENT_S = 300             # no cloud contact this long (Wi-Fi up) -> restart
 HOLD_SECONDS = 50                # ask the cloud to keep each check-in open this long
 CLOUD_FILE = "_cloud.json"       # {"url": "https://...", "token": "..."}
 PORT = 80
@@ -34,7 +37,7 @@ DEFAULT_FILE = "_default"          # program that runs at power-on
 LEGACY_NEXT = "_legacy_next"       # old-style program to run after a restart
 NO_AUTOSTART = "_no_autostart"     # skip a legacy default on the next boot
 ERROR_FILE = "_last_error.txt"
-PROTECTED = ("main.py", "secrets.py")
+PROTECTED = ("main.py", "secrets.py", "boot.py")
 SAFE_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-."
 
 
@@ -151,7 +154,20 @@ def launcher():
         "ip": None,
         "asleep": False,
         "hold": False,        # pause frames so the cloud connection can get memory
+        "wlan": None,
+        "last_ok": time.time(),
     }
+
+    # ---------- watchdog ----------
+    # boot.py arms the hardware watchdog (_wd.py) and feeds it from a timer. While
+    # the launcher runs it switches to strict mode: the timer only feeds while the
+    # display loop keeps ticking, so a full freeze resets the chip and the program
+    # that was playing is resumed. When the launcher exits (Ctrl-C from Thonny)
+    # strict mode is switched off again so the REPL stays usable.
+    try:
+        import _wd
+    except ImportError:
+        _wd = None
 
     def clear_display():
         g.set_pen(g.create_pen(0, 0, 0))
@@ -192,12 +208,15 @@ def launcher():
         st["env"] = env
         st["name"] = name
         st["start"] = time.ticks_ms()
+        if read(RESUME_FILE) != name:
+            write(RESUME_FILE, name)
         print("Running", name)
         return None
 
     def stop_program():
         st["env"] = None
         st["name"] = None
+        remove(RESUME_FILE)
         st["msg"], st["colour"] = (st["ip"] or "No WiFi"), (0, 220, 255)
 
     # ---------- display loop ----------
@@ -206,6 +225,8 @@ def launcher():
         sleep_was = False
         x = W
         while True:
+            if _wd:
+                _wd.tick()
             pressed = su.is_pressed(StellarUnicorn.SWITCH_SLEEP)
             if pressed and not sleep_was:
                 st["asleep"] = not st["asleep"]
@@ -596,6 +617,7 @@ def launcher():
                 failures = 0
                 mem_failures = 0
                 st["hold"] = False
+                st["last_ok"] = time.time()
                 if parked and st["name"] is None and exists(parked):
                     start_program(parked)
                 parked = None
@@ -626,8 +648,41 @@ def launcher():
                     failures += 1
                     st["hold"] = False
                     delay = min(60, 3 * failures)
+                    await ensure_wifi()
             gc.collect()
             await asyncio.sleep(delay)
+
+    async def ensure_wifi():
+        wlan = st["wlan"]
+        if wlan is None or wlan.isconnected():
+            return
+        print("Wi-Fi dropped, reconnecting")
+        try:
+            from secrets import WIFI_SSID, WIFI_PASSWORD
+            wlan.disconnect()
+            wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+        except Exception as e:
+            print("Wi-Fi reconnect failed:", repr(e))
+            return
+        for _ in range(30):
+            if wlan.isconnected():
+                st["ip"] = wlan.ifconfig()[0]
+                print("Wi-Fi back at", st["ip"])
+                return
+            await asyncio.sleep(0.5)
+
+    async def self_heal():
+        # last resort: if the cloud has been unreachable for a long time even
+        # though we keep trying, restart cleanly and resume the current program
+        while True:
+            await asyncio.sleep(30)
+            if st.get("cloud") == "not set up":
+                continue
+            if time.time() - st["last_ok"] > CLOUD_SILENT_S:
+                print("No cloud contact for", CLOUD_SILENT_S, "s; restarting")
+                write(SELF_RESET, "1")
+                await asyncio.sleep(0.2)
+                machine.reset()
 
     def set_clock():
         try:
@@ -659,15 +714,20 @@ def launcher():
         if not wlan.isconnected():
             st["msg"], st["colour"] = "WiFi failed", (255, 0, 0)
             return False
+        st["wlan"] = wlan
         st["ip"] = wlan.ifconfig()[0]
         st["msg"], st["colour"] = st["ip"], (0, 220, 255)
         print("Unicorn ready at http://%s/" % st["ip"])
         set_clock()
+        st["last_ok"] = time.time()   # clock may have jumped; restart the cloud timer
         await asyncio.start_server(handle, "0.0.0.0", PORT)
         asyncio.create_task(cloud_loop())
+        asyncio.create_task(self_heal())
         return True
 
     async def main_async():
+        if _wd:
+            _wd.strict(True)
         for n in os.listdir():
             if n.startswith("install_v") and n.endswith(".py"):
                 remove(n)
@@ -679,6 +739,12 @@ def launcher():
         skip_legacy = exists(NO_AUTOSTART)
         remove(NO_AUTOSTART)
         default = read(DEFAULT_FILE)
+        healed = exists(SELF_RESET) or machine.reset_cause() == getattr(machine, "WDT_RESET", -1)
+        remove(SELF_RESET)
+        resume = read(RESUME_FILE)
+        if healed and resume and exists(resume) and not is_legacy(resume):
+            print("Recovered from a freeze; resuming", resume)
+            default = resume
         if default and exists(default):
             if not is_legacy(default):
                 start_program(default)
@@ -718,7 +784,11 @@ def launcher():
         if exists(name):
             run_legacy(name)
             return
-    asyncio.run(main_async())
+    try:
+        asyncio.run(main_async())
+    finally:
+        if _wd:
+            _wd.strict(False)
 
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8>

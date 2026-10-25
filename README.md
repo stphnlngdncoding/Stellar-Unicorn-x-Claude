@@ -37,6 +37,8 @@ Holding one connection open (instead of polling) matters on this hardware. A TLS
 ```
 board/
   main.py            # launcher: runs programs, LAN web UI, cloud check-in
+  boot.py            # arms the hardware watchdog at power-on
+  _wd.py             # watchdog helper used by boot.py and main.py
   secrets.example.py # copy to secrets.py and add your Wi-Fi details
   cloud.example.json # copy to _cloud.json and add your Worker URL + board token
   programs/          # example programs (life, lava lamp, fractal, warp, ...)
@@ -114,7 +116,7 @@ The free Workers plan covers this comfortably. With long-polling, the board make
    ```json
    {"url": "https://unicorn-cloud.<you>.workers.dev", "token": "<board token>"}
    ```
-5. Copy `main.py`, `secrets.py`, `_cloud.json` and any programs from `board/programs/` to the board. For each file, open it and choose **File → Save as… → Raspberry Pi Pico**, keeping the same name.
+5. Copy `main.py`, `boot.py`, `_wd.py`, `secrets.py`, `_cloud.json` and any programs from `board/programs/` to the board. For each file, open it and choose **File → Save as… → Raspberry Pi Pico**, keeping the same name.
 6. Unplug the board and plug it back in. It shows `WiFi...` in amber, scrolls its IP address in cyan, then plays the default program (if one is set).
 
 From then on, the board only needs power. Any USB charger rated at 5 V and 1 A or more works.
@@ -224,6 +226,31 @@ The launcher (v5 and later) recovers on its own:
 3. After three ENOMEM failures in a row, it **stops the program** to free its memory, reconnects, then **restarts the same program** automatically.
 
 When writing your own programs, you can help by creating pens and lists in `setup()` and reusing them rather than allocating new ones every frame.
+
+## Self-healing
+
+Since v6, the board recovers from freezes and network trouble without anyone touching it:
+
+- **Watchdog.** `boot.py` arms the chip's hardware watchdog (`_wd.py`). While the launcher runs, the watchdog is only fed while the display loop keeps ticking. If the whole board locks up, it resets itself within about 8 seconds.
+- **Resume.** After a watchdog or self-heal restart, the board resumes the program that was playing instead of the power-on default.
+- **Wi-Fi reconnect.** If a check-in fails because Wi-Fi dropped, the launcher reconnects.
+- **Last resort.** After 5 minutes without reaching the cloud, the board restarts cleanly.
+
+**Thonny note.** Pressing Stop (Ctrl-C) switches the watchdog to always-fed mode, so the REPL keeps working. A soft reboot re-runs `boot.py`, which also feeds the watchdog unconditionally. If you ever need to work on the board with no watchdog at all, delete `boot.py` and power-cycle the board.
+
+## Versions and rolling back
+
+Every release is a git tag (`v5.0.0`, `v6.0.0`, …), and [CHANGELOG.md](CHANGELOG.md) lists what changed in each. The major version number matches `VERSION` in `board/main.py`, which the board reports in `get_board_status`.
+
+To roll the board back to an earlier release:
+
+```bash
+git checkout v5.0.0 -- board/      # restores that release's board files
+```
+
+Then copy them to the board, either over USB with Thonny, or by asking Claude to install that version through the connector (see below). When rolling back from v6 to v5, also delete `boot.py` and `_wd.py` from the board.
+
+The board also keeps the previous launcher as `main_v<N>.py` after each over-the-air update, so a one-step rollback only needs renaming it back to `main.py`.
 
 ## Updating the launcher
 
