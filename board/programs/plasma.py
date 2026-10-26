@@ -5,7 +5,7 @@
 import math
 from array import array
 
-SPEED = 0.2          # 1.0 = original speed; lower = calmer
+SPEED = 0.3          # 1.0 = original speed; lower = calmer
 FRAME = 0.02
 
 def setup(su, g):
