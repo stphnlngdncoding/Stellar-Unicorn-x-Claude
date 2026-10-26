@@ -5,6 +5,17 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.2.0 (2026-10-25)
+
+Playlists, one-shot programs, and the Level Up habit tracker on the wall.
+
+- **Playlists.** A `.py` file with `PLAYLIST`, `SECONDS` and an optional `NIGHT` time slot rotates programs on the clock and survives restarts (resume and power-on default both work with playlists). Broken items are skipped.
+- **One-shot programs.** `DURATION = <seconds>` makes a program play once, then the board returns to what was playing before.
+- **Saving without running** a program that's on screen now swaps in the new version instead of stopping it, and keeps the playlist going. Deleting a playlist item keeps the playlist going.
+- Status reports `playlist` and `oneshot`; the board reports `"version": "6.2"`.
+- **Level Up integration** (`board/levelup/`): avatar, X Effect card, check-off celebration and level-up fanfare templates, plus the page module that fills them in and uploads them.
+- `board/programs/rotation.py`: the dragon, Life and plasma, one hour each, X Effect card from 10 to 11 PM.
+
 ## v6.1.0 (2026-10-25)
 
 Fixes the board freezing (screen stuck, offline) while the Game of Life runs.

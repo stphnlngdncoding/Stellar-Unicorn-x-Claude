@@ -1,4 +1,4 @@
-# Stellar Unicorn launcher v6.1 (long-polling cloud, low-memory recovery, watchdog + Wi-Fi self-healing)
+# Stellar Unicorn launcher v6.2 (playlists, one-shot programs, long-polling cloud, self-healing)
 #
 # Keeps a small web server running on your Wi-Fi *while* programs play, so a
 # new program can be sent and started at any time, no button presses needed.
@@ -22,10 +22,22 @@
 # call su.update() (the launcher does), and don't write a `while True` loop.
 # Old-style programs with their own loop still run, but the board restarts
 # into them and the web server is off until you press the sleep button.
+#
+# One-shot programs set DURATION = <seconds> at the top. They play that long,
+# then the board goes back to whatever was playing before (great for
+# celebrations and alerts).
+#
+# Playlists are .py files with no frame() that set:
+#
+#     PLAYLIST = ["avatar.py", "life.py", "plasma.py"]
+#     SECONDS = 3600                       # how long each one plays
+#     NIGHT = {"from": 22, "to": 23, "program": "today_card.py"}   # optional
+#
+# Items change on the clock (every SECONDS), so a restart picks up where it was.
 
 import os, sys, time, gc, json, machine, micropython
 
-VERSION = "6.1"
+VERSION = "6.2"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
 SELF_RESET = "_self_reset"       # set just before a deliberate self-heal restart
@@ -76,9 +88,18 @@ def valid_name(name):
 def programs():
     return sorted(n for n in os.listdir() if valid_name(n))
 
-def is_legacy(name):
+def kind(name):
+    """'contract', 'playlist' or 'legacy'."""
     with open(name) as f:
-        return "def frame" not in f.read()
+        src = f.read()
+    if "def frame" in src:
+        return "contract"
+    if "PLAYLIST" in src:
+        return "playlist"
+    return "legacy"
+
+def is_legacy(name):
+    return kind(name) == "legacy"
 
 def error_text(name, e):
     import io
@@ -157,6 +178,9 @@ def launcher():
         "hold": False,        # pause frames so the cloud connection can get memory
         "wlan": None,
         "last_ok": time.time(),
+        "what": None,         # what the user chose: a program or a playlist
+        "list": None,         # the active playlist
+        "oneshot": None,      # {"name", "until", "back"} for a DURATION program
     }
 
     # ---------- watchdog ----------
@@ -184,8 +208,11 @@ def launcher():
         st["msg"], st["colour"] = "Error :(", (255, 0, 0)
         return text
 
-    def start_program(name):
-        """Load and start a contract program. Returns None or an error string."""
+    def start_program(name, managed=False):
+        """Load and start a contract program. Returns None or an error string.
+
+        managed=True: started by the playlist or to resume; leaves the
+        playlist, one-shot and resume state alone."""
         st["env"] = None
         st["name"] = None
         gc.collect()
@@ -204,22 +231,165 @@ def launcher():
             env["frame"](su, g, 0.0)   # draw one test frame so errors show up right away
             su.update(g)
         except Exception as e:
+            if not managed:
+                st["list"], st["oneshot"], st["what"] = None, None, None
             return fail(name, e)
         remove(ERROR_FILE)
         st["env"] = env
         st["name"] = name
         st["start"] = time.ticks_ms()
-        if read(RESUME_FILE) != name:
-            write(RESUME_FILE, name)
+        dur = env.get("DURATION")
+        if managed:
+            pass
+        elif isinstance(dur, (int, float)) and dur > 0:
+            back = st["oneshot"]["back"] if st["oneshot"] else st["what"]
+            st["oneshot"] = {"name": name, "until": time.ticks_add(time.ticks_ms(), int(dur * 1000)), "back": back}
+        else:
+            st["oneshot"] = None
+            st["list"] = None
+            st["what"] = name
+            if read(RESUME_FILE) != name:
+                write(RESUME_FILE, name)
         print("Running", name)
         return None
+
+    # ---------- playlists ----------
+
+    def load_playlist(name):
+        env = {}
+        with open(name) as f:
+            exec(f.read(), env)
+        items = [n for n in env.get("PLAYLIST", ()) if valid_name(n)]
+        if not items:
+            raise ValueError("PLAYLIST needs at least one program name")
+        night = env.get("NIGHT")
+        if night and not valid_name(night.get("program", "")):
+            night = None
+        return {"name": name, "items": items, "secs": max(10, int(env.get("SECONDS", 3600))),
+                "night": night, "bad": []}
+
+    def usable(pl, n):
+        if n in pl["bad"] or not exists(n):
+            return False
+        try:
+            return kind(n) == "contract"
+        except OSError:
+            return False
+
+    def playlist_pick(pl):
+        night = pl["night"]
+        if night:
+            h = local_time()[3]
+            a, b = night.get("from", 22), night.get("to", 23)
+            if (a <= h < b) if a < b else (h >= a or h < b):
+                if usable(pl, night["program"]):
+                    return night["program"]
+        items = pl["items"]
+        i = int(time.time() // pl["secs"]) % len(items)
+        for k in range(len(items)):
+            n = items[(i + k) % len(items)]
+            if usable(pl, n):
+                return n
+        return None
+
+    def start_playlist(name):
+        try:
+            pl = load_playlist(name)
+        except Exception as e:
+            return fail(name, e)
+        st["oneshot"] = None
+        st["list"] = pl
+        st["what"] = name
+        if read(RESUME_FILE) != name:
+            write(RESUME_FILE, name)
+        print("Playlist", name)
+        return playlist_step()
+
+    def playlist_step():
+        """Make sure the playlist's current pick is playing."""
+        pl = st["list"]
+        want = playlist_pick(pl)
+        if want is None:
+            st["env"], st["name"] = None, None
+            st["msg"], st["colour"] = "Playlist is empty", (255, 160, 0)
+            return None
+        if want == st["name"]:
+            return None
+        err = start_program(want, managed=True)
+        if err:
+            pl["bad"].append(want)
+        return err
+
+    def resume_what(w):
+        if w and exists(w):
+            k = kind(w)
+            if k == "playlist":
+                start_playlist(w)
+                return
+            if k == "contract":
+                start_program(w)
+                return
+        stop_program()
+
+    async def scheduler():
+        while True:
+            await asyncio.sleep(1)
+            if st["hold"]:
+                continue
+            try:
+                o = st["oneshot"]
+                if o:
+                    done = time.ticks_diff(time.ticks_ms(), o["until"]) >= 0
+                    if done or st["name"] != o["name"]:
+                        st["oneshot"] = None
+                        if st["name"] in (o["name"], None):
+                            resume_what(o["back"])
+                    continue
+                if st["list"]:
+                    playlist_step()
+            except Exception as e:
+                print("Scheduler:", repr(e))
 
     def stop_program(keep_resume=False):
         st["env"] = None
         st["name"] = None
         if not keep_resume:
             remove(RESUME_FILE)
+            st["list"] = None
+            st["oneshot"] = None
+            st["what"] = None
         st["msg"], st["colour"] = (st["ip"] or "No WiFi"), (0, 220, 255)
+
+    def replace_file(tmp, name):
+        """Swap in an uploaded file. Returns True if it was playing."""
+        was = st["name"] == name
+        if was:
+            st["env"], st["name"] = None, None
+        remove(name)
+        os.rename(tmp, name)
+        if st["list"] and name in st["list"]["bad"]:
+            st["list"]["bad"].remove(name)
+        return was
+
+    def forget(name):
+        """A file is being deleted: stop it, but keep a playlist going."""
+        if st["name"] == name:
+            if st["list"] or st["oneshot"]:
+                st["env"], st["name"] = None, None
+            else:
+                stop_program()
+        if st["list"] and st["list"]["name"] == name:
+            stop_program()
+
+    def refresh(name, was):
+        """After a save without run: restart it if it was playing, reload a playing playlist."""
+        if st["list"] and st["list"]["name"] == name:
+            start_playlist(name)
+        elif was:
+            if st["list"] or st["oneshot"]:
+                start_program(name, managed=True)
+            else:
+                start_program(name)
 
     # ---------- display loop ----------
 
@@ -254,6 +424,8 @@ def launcher():
                     if isinstance(d, (int, float)) and d >= 0:
                         delay = d
                 except Exception as e:
+                    if st["list"] and st["name"]:
+                        st["list"]["bad"].append(st["name"])
                     fail(st["name"], e)
                 await asyncio.sleep(delay)
             else:
@@ -304,6 +476,8 @@ def launcher():
             "brightness": brightness(),
             "free_kb": s[0] * s[3] // 1024,
             "cloud": st.get("cloud"),
+            "playlist": st["list"]["name"] if st["list"] else None,
+            "oneshot": bool(st["oneshot"]),
         }
 
     def status_json():
@@ -315,7 +489,13 @@ def launcher():
 
     def run_named(name, reset_delay=0.5):
         """Start a program now. Returns (status, message)."""
-        if is_legacy(name):
+        k = kind(name)
+        if k == "playlist":
+            err = start_playlist(name)
+            if err:
+                return 500, err
+            return 200, "Playing playlist %s (now: %s)" % (name, st["name"])
+        if k == "legacy":
             write(LEGACY_NEXT, name)
             asyncio.create_task(later_reset(reset_delay))
             return 200, "Restarting into old-style program " + name + " (press sleep to come back)"
@@ -398,15 +578,13 @@ def launcher():
                     remove(tmp)
                     await send(writer, 400, "Upload was cut off, try again.")
                     return
-                if st["name"] == name:
-                    stop_program()
-                remove(name)
-                os.rename(tmp, name)
+                was = replace_file(tmp, name)
                 print("Uploaded", name, length, "bytes")
                 if params.get("run") == "1":
                     status, msg = run_named(name)
                     await send(writer, status, msg)
                 else:
+                    refresh(name, was)
                     await send(writer, 200, "Saved " + name)
                 return
 
@@ -424,8 +602,7 @@ def launcher():
                 write(DEFAULT_FILE, name)
                 await send(writer, 200, name + " will run at power-on")
             elif path == "/delete":
-                if st["name"] == name:
-                    stop_program()
+                forget(name)
                 remove(name)
                 if read(DEFAULT_FILE) == name:
                     remove(DEFAULT_FILE)
@@ -443,60 +620,58 @@ def launcher():
     # ---------- cloud check-in ----------
 
     def save_program(name, code):
-        if st["name"] == name:
-            stop_program()
         tmp = "_upload.tmp"
         with open(tmp, "w") as f:
             f.write(code)
-        remove(name)
-        os.rename(tmp, name)
+        return replace_file(tmp, name)
 
     def execute(cmd):
         """Run one command from the cloud. Returns a result dict."""
-        kind = cmd.get("type")
+        ctype = cmd.get("type")
         name = cmd.get("name", "")
         res = {"id": cmd.get("id"), "ok": True, "message": "Done"}
         try:
-            if kind in ("upload", "run", "default", "delete", "source") and not valid_name(name):
+            if ctype in ("upload", "run", "default", "delete", "source") and not valid_name(name):
                 raise ValueError("Use a name like my_program.py")
-            if kind in ("run", "default", "delete", "source") and not exists(name):
+            if ctype in ("run", "default", "delete", "source") and not exists(name):
                 raise ValueError(name + " isn't on the board. Programs: " + ", ".join(programs()))
-            if kind == "upload":
-                save_program(name, cmd.get("code", ""))
+            if ctype == "upload":
+                was = save_program(name, cmd.get("code", ""))
                 print("Cloud uploaded", name)
                 res["message"] = "Saved " + name
                 if cmd.get("default"):
                     write(DEFAULT_FILE, name)
                     res["message"] += " (plays at power-on)"
-                if cmd.get("run"):
+                if not cmd.get("run"):
+                    refresh(name, was)
+                else:
                     status, msg = run_named(name, 4)
                     res["ok"] = status == 200
                     res["message"] = msg
-            elif kind == "run":
+            elif ctype == "run":
                 status, msg = run_named(name, 4)
                 res["ok"] = status == 200
                 res["message"] = msg
-            elif kind == "stop":
+            elif ctype == "stop":
                 stop_program()
                 res["message"] = "Stopped"
-            elif kind == "default":
+            elif ctype == "default":
                 write(DEFAULT_FILE, name)
                 res["message"] = name + " will play at power-on"
-            elif kind == "delete":
-                if st["name"] == name:
-                    stop_program()
+            elif ctype == "delete":
+                forget(name)
                 remove(name)
                 if read(DEFAULT_FILE) == name:
                     remove(DEFAULT_FILE)
                 res["message"] = "Deleted " + name
-            elif kind == "source":
+            elif ctype == "source":
                 with open(name) as f:
                     res["message"] = f.read()
-            elif kind == "brightness":
+            elif ctype == "brightness":
                 su.set_brightness(max(0.0, min(1.0, float(cmd.get("value", 0.5)))))
                 res["message"] = "Brightness set"
             else:
-                raise ValueError("unknown command " + str(kind))
+                raise ValueError("unknown command " + str(ctype))
         except Exception as e:
             res["ok"] = False
             res["message"] = "Error: " + str(e)
@@ -622,7 +797,7 @@ def launcher():
                 st["hold"] = False
                 st["last_ok"] = time.time()
                 if parked and st["name"] is None and exists(parked):
-                    start_program(parked)
+                    start_program(parked, managed=True)
                 parked = None
                 st["cloud"] = "ok (blocking)" if use_blocking else "ok"
                 for cmd in reply.get("commands", []):
@@ -744,6 +919,7 @@ def launcher():
             if n.startswith("install_v") and n.endswith(".py"):
                 remove(n)
         asyncio.create_task(render())
+        asyncio.create_task(scheduler())
         online = await connect()
         if online:
             # show the IP address once before the default program starts
@@ -758,7 +934,10 @@ def launcher():
             print("Recovered from a freeze; resuming", resume)
             default = resume
         if default and exists(default):
-            if not is_legacy(default):
+            k = kind(default)
+            if k == "playlist":
+                start_playlist(default)
+            elif k == "contract":
                 start_program(default)
             elif not skip_legacy:
                 write(LEGACY_NEXT, default)

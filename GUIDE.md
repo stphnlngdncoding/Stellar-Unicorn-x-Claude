@@ -40,7 +40,8 @@ board/
   _wd.py             # watchdog helper used by boot.py and main.py
   secrets.example.py # copy to secrets.py and add your Wi-Fi details
   cloud.example.json # copy to _cloud.json and add your Worker URL + board token
-  programs/          # example programs (life, lava lamp, fractal, warp, ...)
+  programs/          # example programs (life, lava lamp, fractal, warp, ...) and rotation.py
+  levelup/           # templates the Level Up habit app fills in (avatar, X Effect card, celebrations)
 cloud/
   src/worker.js      # Cloudflare Worker + Durable Object + MCP server
   setup.sh           # one-command deploy: generates secrets, writes board/_cloud.json
@@ -174,6 +175,20 @@ Rules:
 - `local_time()` is available as a global. It returns the current US Pacific time (daylight saving included) as a `time.localtime`-style tuple. Change the offsets in `main.py` for other time zones.
 - If `setup()` or the first `frame()` raises an error, the upload result contains the traceback.
 
+### Playlists and one-shot programs (v6.2+)
+
+**Playlists** are `.py` files with no `frame()` that list other programs:
+
+```python
+PLAYLIST = ["avatar.py", "life.py", "plasma.py"]
+SECONDS = 3600                                          # each one plays this long
+NIGHT = {"from": 22, "to": 23, "program": "today_card.py"}   # optional time slot
+```
+
+Run one like any program, or make it the power-on default. Items change on the clock (every `SECONDS`, aligned to the hour for 3600), so a restart picks up where it was. During the `NIGHT` hours (local time) the night program plays instead. A program that errors is skipped. Saving a new version of a playlist item (upload with `run: false`) swaps it in without stopping the playlist.
+
+**One-shot programs** set `DURATION = <seconds>` at the top. They play that long, then the board goes back to whatever was playing before, playlist included. Good for celebrations and alerts.
+
 **Old-style programs** with their own `while True` loop (such as Pimoroni's examples) still run. The launcher restarts the board into them, and the web UI and cloud connection stay off until you press the **sleep** button, which restarts back into the launcher. Converting them to `setup`/`frame` is usually a few lines of change.
 
 ## On your Wi-Fi
@@ -217,6 +232,17 @@ The launcher (v5 and later) recovers on its own:
 4. If it's still out of memory 20 seconds after the first failure (failed connections leak memory that only a restart frees), it **restarts the board** and resumes the same program (v6.1+).
 
 When writing your own programs, you can help by creating pens and lists in `setup()` and reusing them rather than allocating new ones every frame.
+
+## Level Up integration
+
+The Level Up habit-tracker artifact talks to the board through the same connector (declared as the page's `mcp` capability, tool `upload_program`). Templates live in `board/levelup/`; the page fills in the data and uploads:
+
+- `avatar.py`: the dragon from the app, squeezed from its 30×30 pixel art to 16×16, with a hop, a blink and a flickering tail flame. Every 24 s it shows a level card (level + XP bar) and a streak card (day streak + one dot per habit done today). Re-uploaded (not started) whenever the dragon, level, mood or habits change.
+- `today_card.py`: tonight's X Effect card, one bar per habit. Done bars glow with a moving shine, crushed bars are gold, unfinished bars pulse dimly. All done = rainbow sweeps. If it's a new day since the last upload, every bar starts unfinished.
+- `celebrate.py`: one-shot (3.5 s) burst + chime and a big X when a habit is checked off today; gold for "crushed", a rainbow show and a scrolling banner for a perfect or legendary day.
+- `levelup.py`: one-shot (7 s, 10 s with evolution) fanfare with the new level, then the dragon.
+
+Sounds are skipped between 11 PM and 7 AM. `board/programs/rotation.py` rotates the dragon, Life and plasma hourly and shows the X Effect card from 10 to 11 PM. `board_module.js` is the code added to the app.
 
 ## Self-healing
 
