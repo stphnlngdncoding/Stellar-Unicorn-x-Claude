@@ -13,14 +13,16 @@ import math, random
 from array import array
 from stellar import StellarUnicorn
 
-LEVEL = 5.0          # how deep the pool is at rest (pixels)
+LEVEL = 3.5          # how deep the pool is at rest (pixels)
 SLOSH = 0.14         # how fast the tank rocks (lower = lazier)
 TILT = 5.5           # how hard it rocks (pixels of height difference)
 WAIT = (6, 15)       # seconds between scoops (random in this range)
 GRAVITY = 60         # how hard blobs and droplets fall (pixels/s^2)
 LIFT_S = 1.0         # seconds to scoop a blob up
 CARRY_S = 1.4        # seconds to carry it somewhere
-SPRAY = 150          # how hard a wave must hit a wall to throw spray
+SPRAY = 110          # how hard a wave must hit a wall to throw spray
+MAX_DROPS = 45       # most droplets in the air at once
+BOUNCE = 0.7         # how bouncy droplets are off the edges (0..1)
 COLOUR_S = 30         # seconds for the colours to go all the way round
 TONES = 0.3           # how far apart the three tones are on the colour wheel (0..0.5)
 SPEED = 2            # overall speed (1 = calm, 2 = twice as fast)
@@ -47,7 +49,7 @@ def setup(su, g):
     next_scoop = random.uniform(3, 6)
     bx = by = bvy = br = tx = ty = ox = 0.0
     lost = taken = 0                             # pool volume carried by the blob (fixed point)
-    drops = []                                   # droplets: [x, y, vx, vy] in pixels
+    drops = []                                   # droplets: [x, y, vx, vy, bounces] in pixels
     a_was = False
 
 def hsv(h, s, v):
@@ -82,15 +84,17 @@ def surface(x):
 def spray(x, n, vx_lo, vx_hi, up_lo, up_hi):
     c = col(x)
     for _ in range(n):
+        if len(drops) >= MAX_DROPS:
+            return
         drops.append([x + random.uniform(-0.4, 0.4), surface(c) - 0.5,
-                      random.uniform(vx_lo, vx_hi), -random.uniform(up_lo, up_hi)])
+                      random.uniform(vx_lo, vx_hi), -random.uniform(up_lo, up_hi), 0])
 
 def splash(x, size):
     c = col(x)
     for k in range(-2, 3):
         if L <= c + k <= R:
-            V[c + k] -= int(size * (300 - 80 * abs(k)))
-    spray(x, int(3 + size * 3), -4.5, 4.5, 6, 12)
+            V[c + k] -= int(size * (380 - 90 * abs(k)))
+    spray(x, int(8 + size * 10), -8, 8, 8, 20)
 
 def step_pool(t):
     # wave physics: each column is pulled by its neighbours (so bumps travel
@@ -120,8 +124,8 @@ def step_pool(t):
     for side, x, away in ((0, L, 1), (1, R, -1)):
         if V[x] > SPRAY and H[x] > H[x + away]:
             hit[side] = 7
-            if random.getrandbits(2) == 0:
-                spray(x + 0.5 - 0.4 * away, 1 + random.getrandbits(1), 0.5 * away, 3.5 * away, 5, 10)
+            if random.getrandbits(1) == 0:
+                spray(x + 0.5 - 0.4 * away, 1 + random.getrandbits(2), 1.0 * away, 7.0 * away, 7, 15)
         elif hit[side]:
             hit[side] -= 1
 
@@ -243,23 +247,34 @@ def frame(su, g, t):
     elif mode == "fall":
         draw_blob(g, bx, by, br, 1.0 + min(0.35, bvy * 0.02))
 
-    # ---- droplets: fly, bounce off the walls, fall back in ----
+    # ---- droplets: fly, bounce off all four edges of the board, skip off the
+    # pool once or twice, then sink back in with a little ripple ----
     i = 0
     while i < len(drops):
         d = drops[i]
         d[3] += GRAVITY * dt
         d[0] += d[2] * dt
         d[1] += d[3] * dt
-        if d[0] < L:                         # bounce off the edges of the board
-            d[0], d[2] = L + 0.01, -d[2] * 0.5
+        if d[0] < L:
+            d[0], d[2] = L + 0.01, -d[2] * BOUNCE
         elif d[0] >= R + 1:
-            d[0], d[2] = R + 0.99, -d[2] * 0.5
+            d[0], d[2] = R + 0.99, -d[2] * BOUNCE
+        if d[1] < 0:                             # off the ceiling
+            d[1], d[3] = 0.01, -d[3] * BOUNCE
         x, y = int(d[0]), int(d[1])
         if d[3] > 0 and y >= surface(x):
-            drops.pop(i)
-            continue
-        if y >= 0:
-            g.set_pen(PENS[12])
+            if d[3] > 10 and d[4] < 2:           # fast drops skip off the surface
+                d[1] = surface(x) - 0.6
+                d[3] = -d[3] * 0.45
+                d[2] *= 0.8
+                d[4] += 1
+                V[x] -= 30
+            else:
+                V[x] -= 45                       # sinks in with a ripple
+                drops.pop(i)
+                continue
+        if 0 <= y < 16:
+            g.set_pen(SPEC if d[3] < -6 else PENS[13])
             g.pixel(x, y)
         i += 1
     return FRAME
