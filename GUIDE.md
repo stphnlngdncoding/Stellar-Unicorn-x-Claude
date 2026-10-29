@@ -236,9 +236,11 @@ When writing your own programs, you can help by creating pens and lists in `setu
 
 ## Unicorn Remote app
 
-`remote/unicorn-remote.html` is a claude.ai artifact page that controls the board through the same `stellar1` connector: it shows what's playing and whether the board is online, and lets you play or stop any program, choose the power-on program and set the brightness. Programs are grouped (Calm, Lively, Games, Music, Words & pictures, Classics); anything it doesn't know yet shows up under Other.
+`remote/unicorn-remote.html` is a claude.ai artifact page that controls the board through the same `stellar1` connector: it shows what's playing and whether the board is online, and lets you play or stop any program, choose the power-on program, set the brightness, and build a rotation: pick programs, drag them into order, choose how often to switch, and start it. Programs are grouped (Calm, Lively, Games, Music, Classics); anything it doesn't know yet shows up under Other.
 
-To publish your own copy, ask Claude to publish the file as an artifact that declares the `mcp` capability for `stellar1` with the tools `get_board_status`, `run_program`, `stop_program`, `set_default_program` and `set_brightness`. The first time you open it, claude.ai asks you to allow the connector for the page. To add a new program's name, colours and group, add a line to `CAT` at the top of the script.
+The rotation is saved on the board as `board/programs/rotation.py`. It's a normal program that runs the others itself, so it works with any launcher version. Programs change on the clock, so it carries on where it was after a restart. Old-style programs are skipped.
+
+To publish your own copy, ask Claude to publish the file as an artifact that declares the `mcp` capability for `stellar1` with the tools `get_board_status`, `run_program`, `stop_program`, `set_default_program`, `set_brightness`, `upload_program` and `get_program_source`. The first time you open it, claude.ai asks you to allow the connector for the page. To add a new program's name, colours and group, add a line to `CAT` at the top of the script.
 
 ## Self-healing
 
