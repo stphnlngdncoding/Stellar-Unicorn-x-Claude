@@ -94,7 +94,7 @@ def splash(x, size):
     for k in range(-2, 3):
         if L <= c + k <= R:
             V[c + k] -= int(size * (380 - 90 * abs(k)))
-    spray(x, int(8 + size * 10), -8, 8, 8, 20)
+    spray(x, int(8 + size * 10), -13, 13, 14, 30)
 
 def step_pool(t):
     # wave physics: each column is pulled by its neighbours (so bumps travel
@@ -125,7 +125,7 @@ def step_pool(t):
         if V[x] > SPRAY and H[x] > H[x + away]:
             hit[side] = 7
             if random.getrandbits(1) == 0:
-                spray(x + 0.5 - 0.4 * away, 1 + random.getrandbits(2), 1.0 * away, 7.0 * away, 7, 15)
+                spray(x + 0.5 - 0.4 * away, 1 + random.getrandbits(2), 2.0 * away, 11.0 * away, 11, 24)
         elif hit[side]:
             hit[side] -= 1
 
