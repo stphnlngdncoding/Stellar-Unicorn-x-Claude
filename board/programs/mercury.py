@@ -1,8 +1,8 @@
 # Liquid metal: the board is a tank of liquid metal that sloshes hard from
 # side to side under heavy gravity, slamming into the edges and climbing
-# them, with a moving chrome sheen. The metal slowly shifts colour like
-# heated titanium: deep blue, violet, magenta, gold, green, teal, with the
-# highlights a step ahead of the body. Every so often an invisible hand
+# them, with a moving chrome sheen. The metal is three-toned (deep, body
+# and shine each a third of the way round the colour wheel) and all three
+# tones keep rolling round the rainbow. Every so often an invisible hand
 # scoops up a blob, carries it somewhere, and drops it back in with a splash
 # that sends waves racing across the tank.
 #   A = scoop up a blob now
@@ -22,6 +22,7 @@ LIFT_S = 1.0         # seconds to scoop a blob up
 CARRY_S = 1.4        # seconds to carry it somewhere
 SPRAY = 150          # how hard a wave must hit a wall to throw spray
 COLOUR_S = 30         # seconds for the colours to go all the way round
+TONES = 0.3           # how far apart the three tones are on the colour wheel (0..0.5)
 SPEED = 2            # overall speed (1 = calm, 2 = twice as fast)
 FRAME = 0.03
 
@@ -57,18 +58,19 @@ def hsv(h, s, v):
     return int(r * 255), int(g * 255), int(b * 255)
 
 def palette(g, t):
-    # heated-titanium colours: deep body -> rich mid -> bright highlight, each
-    # stop a little further round the colour wheel so the shine looks iridescent
+    # three tones a third of the way round the colour wheel from each other:
+    # one for the depths, one for the body, one for the shine on top
     global SPEC
     h = 0.62 + t / COLOUR_S                    # starts at cool blue
-    stops = (hsv(h, 0.95, 0.09), hsv(h + 0.03, 0.9, 0.35), hsv(h + 0.07, 0.85, 0.68),
-             hsv(h + 0.13, 0.6, 0.92), hsv(h + 0.22, 0.18, 1.0))
+    stops = (hsv(h, 0.95, 0.1), hsv(h, 0.9, 0.42),
+             hsv(h + TONES, 0.9, 0.62), hsv(h + TONES, 0.8, 0.85),
+             hsv(h + 2 * TONES, 0.45, 1.0))
     for k in range(SH):
         f = k / (SH - 1) * (len(stops) - 1)
         i = min(int(f), len(stops) - 2); q = f - i
         a, b = stops[i], stops[i + 1]
         PENS[k] = g.create_pen(int(a[0] + (b[0] - a[0]) * q), int(a[1] + (b[1] - a[1]) * q), int(a[2] + (b[2] - a[2]) * q))
-    w = hsv(h + 0.3, 0.1, 1.0)
+    w = hsv(h + 2 * TONES, 0.15, 1.0)
     SPEC = g.create_pen(*w)
 
 def col(x):
