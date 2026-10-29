@@ -1,26 +1,35 @@
-# Liquid metal: a pool of cool blue liquid metal sloshes around the bottom
-# of the board, rocking from side to side with a moving chrome sheen. Every
-# so often an invisible hand scoops up a blob, carries it somewhere, and
-# drops it back in with a splash that sends waves across the pool.
+# Liquid metal: a tank of cool blue liquid metal sloshes hard from side to
+# side under heavy gravity, slamming into the walls and climbing them, with a
+# moving chrome sheen. Every so often an invisible hand scoops up a blob,
+# carries it somewhere, and drops it back in with a splash that sends waves
+# racing across the tank.
 #   A = scoop up a blob now
 #
 # Memory-friendly: the pool is two integer arrays (height and speed per
-# column), pens are made once, and nothing is allocated per frame.
+# column) and pens are made once.
 import math, random
 from array import array
 from stellar import StellarUnicorn
 
 LEVEL = 5.0          # how deep the pool is at rest (pixels)
-SLOSH = 0.08         # how fast the pool rocks (lower = lazier)
-TILT = 4.5           # how far it rocks (pixels of height difference)
-WAIT = (10, 24)      # seconds between scoops (random in this range)
+SLOSH = 0.14         # how fast the tank rocks (lower = lazier)
+TILT = 5.5           # how hard it rocks (pixels of height difference)
+WAIT = (6, 15)       # seconds between scoops (random in this range)
+GRAVITY = 60         # how hard blobs and droplets fall (pixels/s^2)
+LIFT_S = 1.0         # seconds to scoop a blob up
+CARRY_S = 1.4        # seconds to carry it somewhere
+SPRAY = 150          # how hard a wave must hit a wall to throw spray
 FRAME = 0.03
 
+L, R = 1, 14         # inside of the tank (columns); walls at 0 and 15, floor at row 15
+N = R - L + 1
+FLOOR = 15
 SH = 16              # number of shades
 ONE = 256            # fixed point: 1 pixel = 256
 
 def setup(su, g):
-    global H, V, PENS, SPEC, BLACK, SINT, mode, mode_t, next_scoop, bx, by, bvy, br, tx, ty, ox, drops, a_was, lost, taken
+    global H, V, PENS, SPEC, BLACK, WALL, SINT, hit, mode, mode_t, next_scoop
+    global bx, by, bvy, br, tx, ty, ox, drops, a_was, lost, taken
     H = array("i", [int(LEVEL * ONE)] * 16)
     V = array("i", [0] * 16)
     BLACK = g.create_pen(0, 0, 0)
@@ -33,54 +42,91 @@ def setup(su, g):
         a, b = stops[i], stops[i + 1]
         PENS.append(g.create_pen(*[int(a[c] + (b[c] - a[c]) * q) for c in range(3)]))
     SPEC = g.create_pen(235, 248, 255)
+    WALL = [g.create_pen(28 + 10 * k, 36 + 13 * k, 52 + 17 * k) for k in range(8)]   # dark steel, brighter when hit
     SINT = array("h", [int(127 * math.sin(2 * math.pi * i / 256)) for i in range(256)])
+    hit = [0, 0]                                 # how recently each wall got slammed (0..7)
     mode, mode_t = "pool", 0.0
-    next_scoop = random.uniform(4, 8)
+    next_scoop = random.uniform(3, 6)
     bx = by = bvy = br = tx = ty = ox = 0.0
     lost = taken = 0                             # pool volume carried by the blob (fixed point)
-    drops = []                                   # splash droplets: [x, y, vx, vy] in pixels
+    drops = []                                   # droplets: [x, y, vx, vy] in pixels
     a_was = False
 
+def col(x):
+    return L if x < L else R if x > R else int(x)
+
 def surface(x):
-    return 16 - H[x] / ONE                       # y of the pool surface in column x
+    return FLOOR - H[x] / ONE                    # y of the pool surface in column x
+
+def spray(x, n, vx_lo, vx_hi, up_lo, up_hi):
+    c = col(x)
+    for _ in range(n):
+        drops.append([x + random.uniform(-0.4, 0.4), surface(c) - 0.5,
+                      random.uniform(vx_lo, vx_hi), -random.uniform(up_lo, up_hi)])
 
 def splash(x, size):
-    xi = max(0, min(15, int(x)))
+    c = col(x)
     for k in range(-2, 3):
-        c = xi + k
-        if 0 <= c < 16:
-            V[c] -= int(size * (220 - 60 * abs(k)))
-    for _ in range(int(3 + size * 3)):
-        drops.append([x + random.uniform(-0.8, 0.8), surface(xi) - 0.5,
-                      random.uniform(-3.5, 3.5), -random.uniform(4, 9)])
+        if L <= c + k <= R:
+            V[c + k] -= int(size * (300 - 80 * abs(k)))
+    spray(x, int(3 + size * 3), -4.5, 4.5, 6, 12)
 
-def step_pool(t, dt):
+def step_pool(t):
     # wave physics: each column is pulled by its neighbours (so bumps travel
-    # as waves) and gently toward a rocking target shape (the slosh)
-    mean = sum(H) // 16
+    # as waves and bounce off the walls) and toward a rocking target shape
+    total = 0
+    for x in range(L, R + 1):
+        total += H[x]
+    mean = total // N
     tilt = math.sin(t * SLOSH * 2 * math.pi) + 0.35 * math.sin(t * SLOSH * 5.1 + 1.3)
-    k = int(tilt * TILT * ONE / 15)
-    for x in range(16):
-        target = mean + k * (x - 7) + (k // 2 if x == 7 else 0)
-        left = H[x - 1] if x > 0 else H[x]
-        right = H[x + 1] if x < 15 else H[x]
-        V[x] += ((left + right - 2 * H[x]) >> 2) + ((target - H[x]) >> 5)
-        V[x] = V[x] * 61 >> 6                    # damping
-    for x in range(16):
-        H[x] = max(ONE // 2, H[x] + V[x] // 4)
+    k = int(tilt * TILT * ONE / (N - 1))
+    for x in range(L, R + 1):
+        target = mean + k * (2 * x - L - R) // 2
+        left = H[x - 1] if x > L else H[x]
+        right = H[x + 1] if x < R else H[x]
+        V[x] += ((left + right - 2 * H[x]) >> 1) + ((target - H[x]) >> 4)
+        V[x] = V[x] * 62 >> 6                    # damping
+    for x in range(L, R + 1):
+        H[x] = max(ONE // 2, min(14 * ONE, H[x] + V[x] // 4))
     # keep the amount of metal exact (rounding would slowly drain the pool)
-    fix = (int(LEVEL * ONE) * 16 - taken - sum(H)) // 16
-    for x in range(16):
+    total = 0
+    for x in range(L, R + 1):
+        total += H[x]
+    fix = (int(LEVEL * ONE) * N - taken - total) // N
+    for x in range(L, R + 1):
         H[x] += fix
+    # a wave slamming into a wall climbs it and throws spray back off it
+    for side, x, away in ((0, L, 1), (1, R, -1)):
+        if V[x] > SPRAY and H[x] > H[x + away]:
+            hit[side] = 7
+            if random.getrandbits(2) == 0:
+                spray(x + 0.5 - 0.4 * away, 1 + random.getrandbits(1), 0.5 * away, 3.5 * away, 5, 10)
+        elif hit[side]:
+            hit[side] -= 1
+
+def draw_tank(g):
+    g.set_pen(WALL[0])
+    for y in range(16):
+        g.pixel(0, y)
+        g.pixel(15, y)
+    for x in range(16):
+        g.pixel(x, FLOOR)
+    # the wall glows where the liquid smacks into it
+    for side, wx, cx in ((0, 0, L), (1, 15, R)):
+        if hit[side]:
+            s = int(surface(cx))
+            for y in range(max(0, s - 1), min(FLOOR, s + 3)):
+                g.set_pen(WALL[hit[side] - abs(y - s) if hit[side] > abs(y - s) else 0])
+                g.pixel(wx, y)
 
 def draw_pool(g, t):
     tt = int(t * 40)
-    for x in range(16):
+    for x in range(L, R + 1):
         s = surface(x)
         top = int(s)
         frac = s - top                           # partly filled top pixel
-        slope = (H[min(15, x + 1)] - H[max(0, x - 1)]) >> 6
-        for y in range(max(0, top), 16):
+        slope = (H[min(R, x + 1)] - H[max(L, x - 1)]) >> 6
+        for y in range(max(0, top), FLOOR):
             d = y - top
             sheen = SINT[(x * 23 + d * 37 - tt) & 255] + SINT[(x * 11 - d * 19 + tt // 2) & 255]
             if d == 0:
@@ -95,9 +141,9 @@ def draw_pool(g, t):
 def draw_blob(g, cx, cy, r, stretch=1.0):
     # a shaded metal ball, lit from the upper left
     r2 = r * r
-    for y in range(max(0, int(cy - r * stretch) - 1), min(16, int(cy + r * stretch) + 2)):
+    for y in range(max(0, int(cy - r * stretch) - 1), min(FLOOR, int(cy + r * stretch) + 2)):
         dy = (y + 0.5 - cy) / stretch
-        for x in range(max(0, int(cx - r) - 1), min(16, int(cx + r) + 2)):
+        for x in range(max(L, int(cx - r) - 1), min(R + 1, int(cx + r) + 2)):
             dx = x + 0.5 - cx
             d2 = dx * dx + dy * dy
             if d2 <= r2:
@@ -119,25 +165,25 @@ def frame(su, g, t):
     # ---- the scoop / carry / drop cycle ----
     if mode == "pool" and t >= next_scoop:
         mode, mode_t = "lift", t
-        ox = random.uniform(3, 12)
+        ox = random.uniform(3.5, 11.5)
         bx, by = ox, surface(int(ox))
         br = random.uniform(1.7, 2.4)
-        tx, ty = random.uniform(3, 12), random.uniform(2.5, 5.5)
+        tx, ty = random.uniform(3.5, 11.5), random.uniform(2.5, 5.5)
         lost = int(math.pi * br * br * ONE)
         taken = 0
     p = t - mode_t
     if mode == "lift":                           # rises out of the pool, trailing a neck
-        f = min(1.0, p / 1.6)
+        f = min(1.0, p / LIFT_S)
         e = f * f * (3 - 2 * f)
         want = int(lost * e)                     # pool volume taken so far
         per = (want - taken) // 16
         if per > 0:
             # most of it comes from under the blob, the rest from everywhere
-            for x in range(16):
+            for x in range(L, R + 1):
                 H[x] -= per // 2
             c = int(ox)
             for k in (-1, 0, 1):
-                if 0 <= c + k < 16:
+                if L <= c + k <= R:
                     H[c + k] -= per * 16 // 6
             taken += per * 16
         by = surface(int(ox)) + (ty - surface(int(ox))) * e
@@ -145,60 +191,65 @@ def frame(su, g, t):
         if f >= 1:
             mode, mode_t = "carry", t
     elif mode == "carry":                        # drifts over to a new spot, wobbling
-        f = min(1.0, p / 2.2)
+        f = min(1.0, p / CARRY_S)
         e = f * f * (3 - 2 * f)
         bx = ox + (tx - ox) * e
-        by = ty + 0.4 * math.sin(p * 5)
+        by = ty + 0.4 * math.sin(p * 7)
         if f >= 1:
             mode, mode_t, bvy = "fall", t, 0.0
     elif mode == "fall":                         # dropped: falls and splashes in
-        bvy += 30 * dt
+        bvy += GRAVITY * dt
         by += bvy * dt
-        if by + br * 0.6 >= surface(max(0, min(15, int(bx)))):
-            c = max(0, min(15, int(bx)))
-            for k in (-1, 0, 1):        # the metal lands in a heap that spreads out as waves
-                if 0 <= c + k < 16:
+        if by + br * 0.6 >= surface(col(bx)):
+            c = col(bx)
+            for k in (-1, 0, 1):                 # lands in a heap that spreads out as waves
+                if L <= c + k <= R:
                     H[c + k] += taken // 3
             taken = 0
             splash(bx, br / 2)
             mode = "pool"
             next_scoop = t + random.uniform(*WAIT)
 
-    step_pool(t, dt)
+    step_pool(t)
 
     # ---- draw ----
     g.set_pen(BLACK)
     g.clear()
     draw_pool(g, t)
     if mode == "lift":
-        f = min(1.0, (t - mode_t) / 1.6)
+        f = min(1.0, (t - mode_t) / LIFT_S)
         s = surface(int(ox))
         if f < 0.75:                             # the neck of liquid still attached to the pool
             w = (1 - f / 0.75) * br * 0.9
-            for y in range(max(0, int(by)), min(16, int(s) + 1)):
+            for y in range(max(0, int(by)), min(FLOOR, int(s) + 1)):
                 for x in range(int(ox - w), int(ox + w) + 1):
-                    if 0 <= x < 16:
+                    if L <= x <= R:
                         g.set_pen(PENS[7 + (x == int(ox))])
                         g.pixel(x, y)
         draw_blob(g, bx, by, br * (0.5 + 0.5 * f))
     elif mode == "carry":
-        draw_blob(g, bx, by, br, 1.0 + 0.12 * math.sin((t - mode_t) * 9))
+        draw_blob(g, bx, by, br, 1.0 + 0.12 * math.sin((t - mode_t) * 12))
     elif mode == "fall":
         draw_blob(g, bx, by, br, 1.0 + min(0.35, bvy * 0.02))
 
-    # ---- splash droplets ----
+    # ---- droplets: fly, bounce off the walls, fall back in ----
     i = 0
     while i < len(drops):
         d = drops[i]
-        d[3] += 30 * dt
+        d[3] += GRAVITY * dt
         d[0] += d[2] * dt
         d[1] += d[3] * dt
+        if d[0] < L:
+            d[0], d[2] = L + 0.01, -d[2] * 0.5
+        elif d[0] >= R + 1:
+            d[0], d[2] = R + 0.99, -d[2] * 0.5
         x, y = int(d[0]), int(d[1])
-        if not (0 <= x < 16) or (d[3] > 0 and y >= surface(x)):
+        if d[3] > 0 and y >= surface(x):
             drops.pop(i)
             continue
         if y >= 0:
             g.set_pen(PENS[12])
             g.pixel(x, y)
         i += 1
+    draw_tank(g)
     return FRAME
