@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Repo cleanup (2026-10-29)
+
+- Removed the Level Up habit-tracker integration (`board/levelup/`) and `board/programs/rotation.py`, which played its dragon. The app no longer talks to the board. Playlists and one-shot programs in the v6.2 launcher are unchanged; the examples now use regular programs. The removed files are still on the `release/v6.2.0` branch.
+
 ## v6.2.0 (2026-10-25)
 
 Playlists, one-shot programs, and the Level Up habit tracker on the wall.

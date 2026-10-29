@@ -29,9 +29,9 @@
 #
 # Playlists are .py files with no frame() that set:
 #
-#     PLAYLIST = ["avatar.py", "life.py", "plasma.py"]
+#     PLAYLIST = ["plasma.py", "goo.py", "life.py"]
 #     SECONDS = 3600                       # how long each one plays
-#     NIGHT = {"from": 22, "to": 23, "program": "today_card.py"}   # optional
+#     NIGHT = {"from": 22, "to": 23, "program": "lava_lamp.py"}    # optional
 #
 # Items change on the clock (every SECONDS), so a restart picks up where it was.
 

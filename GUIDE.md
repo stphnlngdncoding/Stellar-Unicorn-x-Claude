@@ -40,8 +40,7 @@ board/
   _wd.py             # watchdog helper used by boot.py and main.py
   secrets.example.py # copy to secrets.py and add your Wi-Fi details
   cloud.example.json # copy to _cloud.json and add your Worker URL + board token
-  programs/          # example programs (life, lava lamp, fractal, warp, ...) and rotation.py
-  levelup/           # templates the Level Up habit app fills in (avatar, X Effect card, celebrations)
+  programs/          # example programs (life, lava lamp, fractal, warp, ...)
 remote/
   unicorn-remote.html # the Unicorn Remote artifact app (see below)
 cloud/
@@ -182,9 +181,9 @@ Rules:
 **Playlists** are `.py` files with no `frame()` that list other programs:
 
 ```python
-PLAYLIST = ["avatar.py", "life.py", "plasma.py"]
+PLAYLIST = ["plasma.py", "goo.py", "life.py"]
 SECONDS = 3600                                          # each one plays this long
-NIGHT = {"from": 22, "to": 23, "program": "today_card.py"}   # optional time slot
+NIGHT = {"from": 22, "to": 23, "program": "lava_lamp.py"}   # optional time slot
 ```
 
 Run one like any program, or make it the power-on default. Items change on the clock (every `SECONDS`, aligned to the hour for 3600), so a restart picks up where it was. During the `NIGHT` hours (local time) the night program plays instead. A program that errors is skipped. Saving a new version of a playlist item (upload with `run: false`) swaps it in without stopping the playlist.
@@ -240,17 +239,6 @@ When writing your own programs, you can help by creating pens and lists in `setu
 `remote/unicorn-remote.html` is a claude.ai artifact page that controls the board through the same `stellar1` connector: it shows what's playing and whether the board is online, and lets you play or stop any program, choose the power-on program and set the brightness. Programs are grouped (Calm, Lively, Games, Music, Words & pictures, Classics); anything it doesn't know yet shows up under Other.
 
 To publish your own copy, ask Claude to publish the file as an artifact that declares the `mcp` capability for `stellar1` with the tools `get_board_status`, `run_program`, `stop_program`, `set_default_program` and `set_brightness`. The first time you open it, claude.ai asks you to allow the connector for the page. To add a new program's name, colours and group, add a line to `CAT` at the top of the script.
-
-## Level Up integration
-
-The Level Up habit-tracker artifact talks to the board through the same connector (declared as the page's `mcp` capability, tool `upload_program`). Templates live in `board/levelup/`; the page fills in the data and uploads:
-
-- `avatar.py`: the dragon from the app, squeezed from its 30×30 pixel art to 16×16, with a hop, a blink and a flickering tail flame. Every 24 s it shows a level card (level + XP bar) and a streak card (day streak + one dot per habit done today). Re-uploaded (not started) whenever the dragon, level, mood or habits change.
-- `today_card.py`: tonight's X Effect card, one bar per habit. Done bars glow with a moving shine, crushed bars are gold, unfinished bars pulse dimly. All done = rainbow sweeps. If it's a new day since the last upload, every bar starts unfinished.
-- `celebrate.py`: one-shot (3.5 s) burst + chime and a big X when a habit is checked off today; gold for "crushed", a rainbow show and a scrolling banner for a perfect or legendary day.
-- `levelup.py`: one-shot (7 s, 10 s with evolution) fanfare with the new level, then the dragon.
-
-Sounds are skipped between 11 PM and 7 AM. `board/programs/rotation.py` rotates the dragon, Life and plasma hourly and shows the X Effect card from 10 to 11 PM. `board_module.js` is the code added to the app.
 
 ## Self-healing
 
