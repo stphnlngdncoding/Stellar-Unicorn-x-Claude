@@ -42,6 +42,8 @@ board/
   cloud.example.json # copy to _cloud.json and add your Worker URL + board token
   programs/          # example programs (life, lava lamp, fractal, warp, ...) and rotation.py
   levelup/           # templates the Level Up habit app fills in (avatar, X Effect card, celebrations)
+remote/
+  unicorn-remote.html # the Unicorn Remote artifact app (see below)
 cloud/
   src/worker.js      # Cloudflare Worker + Durable Object + MCP server
   setup.sh           # one-command deploy: generates secrets, writes board/_cloud.json
@@ -232,6 +234,12 @@ The launcher (v5 and later) recovers on its own:
 4. If it's still out of memory 20 seconds after the first failure (failed connections leak memory that only a restart frees), it **restarts the board** and resumes the same program (v6.1+).
 
 When writing your own programs, you can help by creating pens and lists in `setup()` and reusing them rather than allocating new ones every frame.
+
+## Unicorn Remote app
+
+`remote/unicorn-remote.html` is a claude.ai artifact page that controls the board through the same `stellar1` connector: it shows what's playing and whether the board is online, and lets you play or stop any program, choose the power-on program and set the brightness. Programs are grouped (Calm, Lively, Games, Music, Words & pictures, Classics); anything it doesn't know yet shows up under Other.
+
+To publish your own copy, ask Claude to publish the file as an artifact that declares the `mcp` capability for `stellar1` with the tools `get_board_status`, `run_program`, `stop_program`, `set_default_program` and `set_brightness`. The first time you open it, claude.ai asks you to allow the connector for the page. To add a new program's name, colours and group, add a line to `CAT` at the top of the script.
 
 ## Level Up integration
 

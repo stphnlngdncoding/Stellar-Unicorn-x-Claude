@@ -1,0 +1,237 @@
+<title>App: Unicorn Remote</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a "now playing" panel up top (status, brightness, stop), then the program library as a grid of LED tiles grouped by mood. Tap a tile to play it. */
+:root{
+  --bg:#eef0f5; --panel:#ffffff; --raise:#f5f6fa; --ink:#161925; --muted:#5d6377; --line:#d9dce6;
+  --accent:#5b3df5; --on-accent:#ffffff; --live:#12a37a; --warn:#c2410c; --bad:#c62f4b; --led-off:#22252f;
+  --display:"Pixelify Sans","Courier New",monospace;
+  --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c0d12; --panel:#15171f; --raise:#1c1f2a; --ink:#ecedf4; --muted:#9499ad; --line:#2a2d3a;
+  --accent:#8f7bff; --on-accent:#0c0d12; --live:#3ddbab; --warn:#fb923c; --bad:#ff6b85; --led-off:#1b1d26; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c0d12; --panel:#15171f; --raise:#1c1f2a; --ink:#ecedf4; --muted:#9499ad; --line:#2a2d3a;
+  --accent:#8f7bff; --on-accent:#0c0d12; --live:#3ddbab; --warn:#fb923c; --bad:#ff6b85; --led-off:#1b1d26; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1{font-family:var(--display);font-weight:700;font-size:1.9rem;margin:0;letter-spacing:.01em;line-height:1}
+h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:1px}
+.dot.on{background:var(--live);box-shadow:0 0 0 3px color-mix(in srgb,var(--live) 25%,transparent)}
+.conn{font-size:.85rem;color:var(--muted)}
+.now{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+.now .big{width:84px;height:84px}
+.nowinfo{display:flex;flex-direction:column;gap:8px;min-width:0}
+.eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.nowname{font-family:var(--display);font-size:1.5rem;font-weight:700;line-height:1.1;overflow-wrap:anywhere}
+.nowsub{font-size:.88rem;color:var(--muted)}
+.ctrls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:10px;padding:7px 12px;font-weight:600;font-size:.88rem}
+.btn:disabled{opacity:.5;cursor:default}
+.bright{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);flex:1 1 180px}
+.bright input{flex:1;accent-color:var(--accent);min-width:0}
+.bright output{font-family:var(--mono);font-size:.8rem;width:3.2em;text-align:right;color:var(--ink)}
+.msg{font-size:.88rem;border-radius:10px;padding:10px 12px;background:var(--raise);border:1px solid var(--line);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.msg.bad{border-color:color-mix(in srgb,var(--bad) 50%,var(--line));color:var(--bad)}
+.group{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.tile{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:center;text-align:left;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.tile:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.tile[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.tile .tn{font-weight:600;line-height:1.2;overflow-wrap:anywhere}
+.tile .td{font-size:.76rem;color:var(--muted);line-height:1.3;display:block;margin-top:2px}
+.tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.tag{font-size:.64rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:99px;background:var(--raise);color:var(--muted)}
+.tag.star{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.tag.live{background:color-mix(in srgb,var(--live) 18%,transparent);color:var(--live)}
+.led{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;aspect-ratio:1;max-width:100%;background:#07080b;border-radius:7px;padding:4px}
+.led i{border-radius:50%;background:var(--led-off)}
+.big.led{grid-template-columns:repeat(6,1fr);gap:3px;padding:7px;border-radius:12px}
+.tile[aria-pressed="true"] .led i{animation:tw 2.4s ease-in-out infinite}
+@keyframes tw{50%{filter:brightness(.55)}}
+@media (prefers-reduced-motion:reduce){.tile[aria-pressed="true"] .led i{animation:none}}
+.menu{display:flex;gap:6px;flex-wrap:wrap}
+.foot{font-size:.8rem;color:var(--muted)}
+.sel{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.toggle{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center}
+@media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px}.tile .td{display:none}.now .big{width:64px;height:64px}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Unicorn Remote</h1>
+    <span class="conn" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting to the board…</span></span>
+  </header>
+
+  <section class="now" aria-labelledby="nowLabel">
+    <div class="big led" id="nowLed" aria-hidden="true"></div>
+    <div class="nowinfo">
+      <span class="eyebrow" id="nowLabel">Now playing</span>
+      <span class="nowname" id="nowName">Plasma</span>
+      <span class="nowsub" id="nowSub">Power-on: Plasma</span>
+      <div class="ctrls">
+        <label class="bright" for="bright">Brightness <input type="range" id="bright" min="5" max="100" step="5" value="50"><output id="brightOut">50%</output></label>
+        <button type="button" class="btn" id="stopBtn">Stop</button>
+        <button type="button" class="btn" id="refreshBtn">Refresh</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="msg" id="msg" hidden></div>
+
+  <div class="sel">
+    <span class="foot" id="hint">Tap a program to play it. Tap the star to make it play at power-on.</span>
+    <label class="toggle" for="defMode"><input type="checkbox" id="defMode"> Set power-on</label>
+  </div>
+
+  <div id="library" style="display:flex;flex-direction:column;gap:22px"></div>
+
+  <p class="foot">Classic Pimoroni programs restart the board while they play. Press the board's sleep button to come back to the remote.</p>
+</div>
+
+<script>
+(() => {
+  const SERVER = "stellar1";
+  // What we know about each program we've made: name, what it does, its colours, its group.
+  const CAT = {
+    "plasma.py":      ["Plasma", "Rainbow sine waves rippling across the board", ["#ff3d6e","#ffb02e","#3ddc84","#3d7bff"], "Calm"],
+    "lava_lamp.py":   ["Lava lamp", "Warm blobs rising and falling", ["#ff4b1f","#ff9a1f","#7a0f2a","#ffd166"], "Calm"],
+    "goo.py":         ["Goo", "Slow glowing blobs that merge and split", ["#3df5c4","#1a9e8f","#0b3a4a","#9effe0"], "Calm"],
+    "tides.py":       ["Tides", "Liquid waves in jewel tones", ["#1e1460","#0a6e8c","#d2a028","#c83c5a"], "Calm"],
+    "drift.py":       ["Drift", "Glowing motes with fading trails", ["#3ab5b0","#5aa0d8","#8c78c8","#123"], "Calm"],
+    "fractal.py":     ["Fractal", "A slowly evolving fractal in muted colours", ["#7d6b91","#a3b18a","#588b8b","#c8b6a6"], "Calm"],
+    "garden.py":      ["Garden", "Plants that sprout, bloom and reseed", ["#3ddc84","#ff6fae","#ffd166","#5b3a1a"], "Calm"],
+    "mercury.py":     ["Liquid metal", "Sloshing three-tone metal with splashes", ["#3d7bff","#c8e6ff","#8f3dff","#0a1440"], "Lively"],
+    "morph.py":       ["Morph", "Kaleidoscope that melts between shapes", ["#ff3df0","#3dfff2","#ffe53d","#3d3dff"], "Lively"],
+    "tunnel.py":      ["Tunnel", "Drive through a twisting neon tunnel", ["#ff2e88","#2ef2ff","#6a2eff","#ffd02e"], "Lively"],
+    "warp.py":        ["Warp", "Stars streaking past at warp speed", ["#ffffff","#9fd3ff","#3d5aff","#0a0f2e"], "Lively"],
+    "rainbow.py":     ["Rainbow", "Rainbow effects, three modes on A/B/C", ["#ff3d3d","#ffd23d","#3dff7a","#3d8bff"], "Lively"],
+    "life.py":        ["Game of Life", "Cells that live, die and change colour", ["#ffffff","#7af0ff","#ff7ad9","#c8ff7a"], "Games"],
+    "snake.py":       ["Snake", "Plays itself; A and B steer", ["#ff3d6e","#3dff9e","#ffe53d","#ff283c"], "Games"],
+    "adventure.py":   ["Adventure", "An 8-bit theme song with a title card", ["#ffb02e","#ff5d3d","#fff3c4","#3d7bff"], "Music"],
+    "smiley.py":      ["Smiley", "A smiley face", ["#ffd23d","#ffd23d","#1a1400","#ffd23d"], "Words & pictures"],
+    "shizune.py":     ["Shizune", "\"Shizune is the best!\"", ["#ff7ad9","#ffd1f0","#ff3d9e","#fff"], "Words & pictures"],
+    "eggs.py":        ["Let's make eggs!", "Scrolling text", ["#ffd23d","#ffffff","#ff9a1f","#fff3c4"], "Words & pictures"],
+    "magiclinks.py":  ["Magiclinks", "Animated Magiclinks title", ["#8f3dff","#3df2ff","#ff3df0","#fff"], "Words & pictures"],
+    "magiclinks_best.py": ["Magiclinks is the best!", "Scrolling text", ["#8f3dff","#3df2ff","#ff3df0","#fff"], "Words & pictures"],
+    "magiclinks_rocks.py": ["Magiclinks rocks!", "Scrolling text", ["#ff3df0","#ffe53d","#3df2ff","#fff"], "Words & pictures"],
+    "magiclinks_reid.py": ["Magiclinks is awesome", "With a word for Reid", ["#3dff9e","#8f3dff","#ff3d3d","#fff"], "Words & pictures"],
+    "fire.py":        ["Fire", "Pimoroni classic: flickering flames", ["#ff2a00","#ff8a00","#ffd000","#3a0a00"], "Classics"],
+    "supercomputer.py": ["Supercomputer", "Pimoroni classic: blinking lights", ["#ff3d3d","#3dff7a","#3d8bff","#ffd23d"], "Classics"],
+    "today.py":       ["Today", "Pimoroni classic: the date", ["#ffffff","#ff3d3d","#9fd3ff","#ffd23d"], "Classics"]
+  };
+  const ORDER = ["Calm", "Lively", "Games", "Music", "Words & pictures", "Classics", "Other"];
+  const HIDE = n => /^main(_v\d+)?\.py$/.test(n) || /^install_/.test(n);
+  const LEGACY = new Set(["fire.py", "supercomputer.py", "today.py"]);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // Until the board answers, show the library we know about so the page isn't empty.
+  let S = { online: null, programs: Object.keys(CAT).concat([]), running: null, def: null, brightness: 0.5, sample: true };
+  let mcp = null, busy = false;
+
+  const info = n => CAT[n] || [n.replace(/\.py$/, "").replace(/[_-]+/g, " ").replace(/^./, c => c.toUpperCase()), "", hashCols(n), "Other"];
+  function hashCols(n) {
+    let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return [0, 1, 2, 3].map(i => `hsl(${(h + i * 67) % 360} 85% ${50 + (i % 2) * 15}%)`);
+  }
+  function led(cols, n) {
+    let s = ""; for (let i = 0; i < n * n; i++) { const x = i % n, y = (i / n) | 0, k = (x * 3 + y * 5 + ((x * y) % 3)) % 6; s += k < 4 ? `<i style="background:${cols[k]}"></i>` : "<i></i>"; }
+    return s;
+  }
+
+  function render() {
+    const R = S.running, D = S.def;
+    $("dot").className = "dot" + (S.online ? " on" : "");
+    $("connText").textContent = S.sample ? "Connecting to the board…" : S.online ? "Board online" : "Board offline";
+    if (R) { const I = info(R); $("nowName").textContent = I[0]; $("nowLed").innerHTML = led(I[2], 6); }
+    else { $("nowName").textContent = S.sample ? "…" : "Nothing playing"; $("nowLed").innerHTML = led(["#333", "#333", "#333", "#333"], 6); }
+    $("nowSub").textContent = (D ? "Power-on: " + info(D)[0] : "No power-on program") + (S.sample ? "" : "");
+    const b = Math.round((S.brightness ?? 0.5) * 100); if (document.activeElement !== $("bright")) { $("bright").value = b; $("brightOut").textContent = b + "%"; }
+    const groups = {};
+    S.programs.filter(n => !HIDE(n)).forEach(n => { const g = info(n)[3]; (groups[g] = groups[g] || []).push(n); });
+    $("library").innerHTML = ORDER.filter(g => groups[g]).map(g => `<section class="group"><h2>${esc(g)}</h2><div class="grid">${groups[g].map(n => {
+      const I = info(n), on = n === R, star = n === D;
+      return `<button type="button" class="tile" data-n="${esc(n)}" aria-pressed="${on}"><div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
+    }).join("")}</div></section>`).join("");
+  }
+
+  function note(text, kind, action) {
+    const m = $("msg");
+    if (!text) { m.hidden = true; return; }
+    m.hidden = false; m.className = "msg" + (kind === "bad" ? " bad" : "");
+    m.innerHTML = `<span>${esc(text)}</span>`;
+    if (action) { const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = action[0]; b.onclick = action[1]; m.appendChild(b); }
+  }
+  function failNote(e, retry) {
+    const c = e && e.code;
+    if (c === "server_not_connected") note("The stellar1 connector isn't connected. Add it in claude.ai Settings → Connectors.", "bad");
+    else if (c === "needs_reauth") note("Reconnect stellar1 in claude.ai Settings → Connectors.", "bad");
+    else if (c === "not_in_manifest" || c === "approval_required" || c === "not_granted") note("This page needs your OK to control the board.", "bad", ["Allow and retry", retry]);
+    else if (c === "tool_error") note("The board said: " + String(e.message || "error").slice(0, 200), "bad");
+    else note("Couldn't reach the board just now.", "bad", ["Try again", retry]);
+  }
+  const textOf = r => { if (!r) return ""; if (typeof r.payload === "string") return r.payload; const t = (r.content || []).find(x => x.type === "text"); return t ? t.text : ""; };
+
+  async function call(tool, input) {
+    if (!mcp) throw { code: "capability_disabled" };
+    return mcp.callTool(SERVER, tool, input || {}, { cache: false });
+  }
+  async function refresh() {
+    try {
+      const r = await call("get_board_status");
+      let p = r.payload; if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { p = null; } }
+      if (!p) { const t = textOf(r); try { p = JSON.parse(t); } catch (e) { p = null; } }
+      if (!p) throw { code: "upstream_error" };
+      const B = p.board || {};
+      S = { online: !!p.online, programs: (B.programs || []).slice().sort((a, b) => info(a)[0].localeCompare(info(b)[0])), running: B.running || null, def: B.default || null, brightness: B.brightness, sample: false };
+      if (!S.online) note("The board hasn't checked in recently. Is it plugged in and on Wi-Fi?", "bad"); else if (!busy) note("");
+      render();
+    } catch (e) { failNote(e, refresh); }
+  }
+  async function act(tool, input, done) {
+    if (busy) return; busy = true;
+    try { const r = await call(tool, input); const t = textOf(r); if (/^error/i.test(t)) note(t, "bad"); else { done && done(t); note(""); } render(); }
+    catch (e) { failNote(e, () => act(tool, input, done)); }
+    finally { busy = false; }
+  }
+
+  $("library").addEventListener("click", e => {
+    const b = e.target.closest(".tile"); if (!b) return;
+    const n = b.dataset.n;
+    if ($("defMode").checked) { act("set_default_program", { name: n }, () => { S.def = n; $("defMode").checked = false; note("") }); return; }
+    if (LEGACY.has(n)) note(info(n)[0] + " restarts the board. Press the sleep button on the board to come back.");
+    S.running = n; render();
+    act("run_program", { name: n }, () => { S.running = n; });
+  });
+  $("stopBtn").onclick = () => act("stop_program", {}, () => { S.running = null; });
+  $("refreshBtn").onclick = refresh;
+  let bt = null;
+  $("bright").addEventListener("input", e => {
+    const v = +e.target.value; $("brightOut").textContent = v + "%";
+    clearTimeout(bt); bt = setTimeout(() => act("set_brightness", { value: v / 100 }, () => { S.brightness = v / 100; }), 350);
+  });
+  $("defMode").addEventListener("change", e => { $("hint").textContent = e.target.checked ? "Tap the program that should play when the board powers on." : "Tap a program to play it. Turn on “Set power-on” to choose what plays at startup."; });
+  $("hint").textContent = "Tap a program to play it. Turn on “Set power-on” to choose what plays at startup.";
+
+  render();
+  (async () => {
+    const Cl = window.claude;
+    try { mcp = Cl && Cl.use ? await Cl.use("mcp") : null; } catch (e) { mcp = null; }
+    if (!mcp) { $("connText").textContent = "Open this in Claude to control the board"; note("This remote works inside claude.ai with the stellar1 connector.", "bad"); return; }
+    refresh();
+    setInterval(() => { if (!document.hidden && !busy) refresh(); }, 30000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  })();
+})();
+</script>
