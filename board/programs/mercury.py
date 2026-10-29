@@ -1,12 +1,14 @@
-# Liquid metal: a tank of cool blue liquid metal sloshes hard from side to
-# side under heavy gravity, slamming into the walls and climbing them, with a
-# moving chrome sheen. Every so often an invisible hand scoops up a blob,
-# carries it somewhere, and drops it back in with a splash that sends waves
-# racing across the tank.
+# Liquid metal: the board is a tank of liquid metal that sloshes hard from
+# side to side under heavy gravity, slamming into the edges and climbing
+# them, with a moving chrome sheen. The metal slowly shifts colour like
+# heated titanium: deep blue, violet, magenta, gold, green, teal, with the
+# highlights a step ahead of the body. Every so often an invisible hand
+# scoops up a blob, carries it somewhere, and drops it back in with a splash
+# that sends waves racing across the tank.
 #   A = scoop up a blob now
 #
 # Memory-friendly: the pool is two integer arrays (height and speed per
-# column) and pens are made once.
+# column), and the 16 pens are refreshed four times a second.
 import math, random
 from array import array
 from stellar import StellarUnicorn
@@ -19,30 +21,24 @@ GRAVITY = 60         # how hard blobs and droplets fall (pixels/s^2)
 LIFT_S = 1.0         # seconds to scoop a blob up
 CARRY_S = 1.4        # seconds to carry it somewhere
 SPRAY = 150          # how hard a wave must hit a wall to throw spray
+COLOUR_S = 90         # seconds for the colours to go all the way round
 FRAME = 0.03
 
-L, R = 1, 14         # inside of the tank (columns); walls at 0 and 15, floor at row 15
+L, R = 0, 15         # the tank is the whole board; its walls are just past the edges
 N = R - L + 1
-FLOOR = 15
+FLOOR = 16
 SH = 16              # number of shades
 ONE = 256            # fixed point: 1 pixel = 256
 
 def setup(su, g):
-    global H, V, PENS, SPEC, BLACK, WALL, SINT, hit, mode, mode_t, next_scoop
+    global H, V, PENS, SPEC, BLACK, SINT, hit, mode, mode_t, next_scoop, pal_at
     global bx, by, bvy, br, tx, ty, ox, drops, a_was, lost, taken
     H = array("i", [int(LEVEL * ONE)] * 16)
     V = array("i", [0] * 16)
     BLACK = g.create_pen(0, 0, 0)
-    # deep navy -> steel blue -> icy white
-    stops = [(2, 6, 28), (8, 28, 90), (30, 80, 170), (90, 160, 230), (200, 235, 255)]
-    PENS = []
-    for k in range(SH):
-        f = k / (SH - 1) * (len(stops) - 1)
-        i = min(int(f), len(stops) - 2); q = f - i
-        a, b = stops[i], stops[i + 1]
-        PENS.append(g.create_pen(*[int(a[c] + (b[c] - a[c]) * q) for c in range(3)]))
-    SPEC = g.create_pen(235, 248, 255)
-    WALL = [g.create_pen(28 + 10 * k, 36 + 13 * k, 52 + 17 * k) for k in range(8)]   # dark steel, brighter when hit
+    PENS = [BLACK] * SH
+    SPEC = BLACK
+    pal_at = -99.0
     SINT = array("h", [int(127 * math.sin(2 * math.pi * i / 256)) for i in range(256)])
     hit = [0, 0]                                 # how recently each wall got slammed (0..7)
     mode, mode_t = "pool", 0.0
@@ -51,6 +47,28 @@ def setup(su, g):
     lost = taken = 0                             # pool volume carried by the blob (fixed point)
     drops = []                                   # droplets: [x, y, vx, vy] in pixels
     a_was = False
+
+def hsv(h, s, v):
+    h %= 1.0
+    i = int(h * 6); f = h * 6 - i
+    p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
+    r, g, b = ((v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q))[i % 6]
+    return int(r * 255), int(g * 255), int(b * 255)
+
+def palette(g, t):
+    # heated-titanium colours: deep body -> rich mid -> bright highlight, each
+    # stop a little further round the colour wheel so the shine looks iridescent
+    global SPEC
+    h = 0.62 + t / COLOUR_S                    # starts at cool blue
+    stops = (hsv(h, 0.95, 0.09), hsv(h + 0.03, 0.9, 0.35), hsv(h + 0.07, 0.85, 0.68),
+             hsv(h + 0.13, 0.6, 0.92), hsv(h + 0.22, 0.18, 1.0))
+    for k in range(SH):
+        f = k / (SH - 1) * (len(stops) - 1)
+        i = min(int(f), len(stops) - 2); q = f - i
+        a, b = stops[i], stops[i + 1]
+        PENS[k] = g.create_pen(int(a[0] + (b[0] - a[0]) * q), int(a[1] + (b[1] - a[1]) * q), int(a[2] + (b[2] - a[2]) * q))
+    w = hsv(h + 0.3, 0.1, 1.0)
+    SPEC = g.create_pen(*w)
 
 def col(x):
     return L if x < L else R if x > R else int(x)
@@ -87,7 +105,7 @@ def step_pool(t):
         V[x] += ((left + right - 2 * H[x]) >> 1) + ((target - H[x]) >> 4)
         V[x] = V[x] * 62 >> 6                    # damping
     for x in range(L, R + 1):
-        H[x] = max(ONE // 2, min(14 * ONE, H[x] + V[x] // 4))
+        H[x] = max(ONE // 2, min(15 * ONE, H[x] + V[x] // 4))
     # keep the amount of metal exact (rounding would slowly drain the pool)
     total = 0
     for x in range(L, R + 1):
@@ -95,7 +113,7 @@ def step_pool(t):
     fix = (int(LEVEL * ONE) * N - taken - total) // N
     for x in range(L, R + 1):
         H[x] += fix
-    # a wave slamming into a wall climbs it and throws spray back off it
+    # a wave slamming into an edge climbs it and throws spray back off it
     for side, x, away in ((0, L, 1), (1, R, -1)):
         if V[x] > SPRAY and H[x] > H[x + away]:
             hit[side] = 7
@@ -103,21 +121,6 @@ def step_pool(t):
                 spray(x + 0.5 - 0.4 * away, 1 + random.getrandbits(1), 0.5 * away, 3.5 * away, 5, 10)
         elif hit[side]:
             hit[side] -= 1
-
-def draw_tank(g):
-    g.set_pen(WALL[0])
-    for y in range(16):
-        g.pixel(0, y)
-        g.pixel(15, y)
-    for x in range(16):
-        g.pixel(x, FLOOR)
-    # the wall glows where the liquid smacks into it
-    for side, wx, cx in ((0, 0, L), (1, 15, R)):
-        if hit[side]:
-            s = int(surface(cx))
-            for y in range(max(0, s - 1), min(FLOOR, s + 3)):
-                g.set_pen(WALL[hit[side] - abs(y - s) if hit[side] > abs(y - s) else 0])
-                g.pixel(wx, y)
 
 def draw_pool(g, t):
     tt = int(t * 40)
@@ -155,8 +158,11 @@ def draw_blob(g, cx, cy, r, stretch=1.0):
                 g.pixel(x, y)
 
 def frame(su, g, t):
-    global mode, mode_t, next_scoop, bx, by, bvy, br, tx, ty, ox, lost, taken, a_was
+    global mode, mode_t, next_scoop, bx, by, bvy, br, tx, ty, ox, lost, taken, a_was, pal_at
     dt = FRAME
+    if t - pal_at > 0.25:
+        palette(g, t)
+        pal_at = t
     a = su.is_pressed(StellarUnicorn.SWITCH_A)
     if a and not a_was and mode == "pool":
         next_scoop = t
@@ -239,7 +245,7 @@ def frame(su, g, t):
         d[3] += GRAVITY * dt
         d[0] += d[2] * dt
         d[1] += d[3] * dt
-        if d[0] < L:
+        if d[0] < L:                         # bounce off the edges of the board
             d[0], d[2] = L + 0.01, -d[2] * 0.5
         elif d[0] >= R + 1:
             d[0], d[2] = R + 0.99, -d[2] * 0.5
@@ -251,5 +257,4 @@ def frame(su, g, t):
             g.set_pen(PENS[12])
             g.pixel(x, y)
         i += 1
-    draw_tank(g)
     return FRAME
