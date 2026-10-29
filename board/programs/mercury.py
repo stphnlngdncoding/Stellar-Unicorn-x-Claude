@@ -8,7 +8,7 @@
 #   A = scoop up a blob now
 #
 # Memory-friendly: the pool is two integer arrays (height and speed per
-# column), and the 16 pens are refreshed four times a second.
+# column), and the 16 pens are refreshed about eight times a second.
 import math, random
 from array import array
 from stellar import StellarUnicorn
@@ -21,7 +21,7 @@ GRAVITY = 60         # how hard blobs and droplets fall (pixels/s^2)
 LIFT_S = 1.0         # seconds to scoop a blob up
 CARRY_S = 1.4        # seconds to carry it somewhere
 SPRAY = 150          # how hard a wave must hit a wall to throw spray
-COLOUR_S = 90         # seconds for the colours to go all the way round
+COLOUR_S = 30         # seconds for the colours to go all the way round
 SPEED = 2            # overall speed (1 = calm, 2 = twice as fast)
 FRAME = 0.03
 
@@ -160,7 +160,7 @@ def draw_blob(g, cx, cy, r, stretch=1.0):
 
 def frame(su, g, t):
     global mode, mode_t, next_scoop, bx, by, bvy, br, tx, ty, ox, lost, taken, a_was, pal_at
-    if t - pal_at > 0.25:
+    if t - pal_at > 0.12:
         palette(g, t)                            # colours keep their own pace
         pal_at = t
     t *= SPEED                                   # everything else runs SPEED times faster
