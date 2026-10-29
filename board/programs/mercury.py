@@ -22,6 +22,7 @@ LIFT_S = 1.0         # seconds to scoop a blob up
 CARRY_S = 1.4        # seconds to carry it somewhere
 SPRAY = 150          # how hard a wave must hit a wall to throw spray
 COLOUR_S = 90         # seconds for the colours to go all the way round
+SPEED = 2            # overall speed (1 = calm, 2 = twice as fast)
 FRAME = 0.03
 
 L, R = 0, 15         # the tank is the whole board; its walls are just past the edges
@@ -159,10 +160,11 @@ def draw_blob(g, cx, cy, r, stretch=1.0):
 
 def frame(su, g, t):
     global mode, mode_t, next_scoop, bx, by, bvy, br, tx, ty, ox, lost, taken, a_was, pal_at
-    dt = FRAME
     if t - pal_at > 0.25:
-        palette(g, t)
+        palette(g, t)                            # colours keep their own pace
         pal_at = t
+    t *= SPEED                                   # everything else runs SPEED times faster
+    dt = FRAME * SPEED
     a = su.is_pressed(StellarUnicorn.SWITCH_A)
     if a and not a_was and mode == "pool":
         next_scoop = t
@@ -216,7 +218,8 @@ def frame(su, g, t):
             mode = "pool"
             next_scoop = t + random.uniform(*WAIT)
 
-    step_pool(t)
+    for _ in range(SPEED):
+        step_pool(t)
 
     # ---- draw ----
     g.set_pen(BLACK)
