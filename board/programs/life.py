@@ -17,8 +17,8 @@ import random
 from stellar import StellarUnicorn
 
 # --- settings to play with ---
-STEP_SECONDS = 0.6   # time between generations (bigger = slower)
-FADE = 0.12          # how fast cells fade in/out (smaller = softer, slower)
+STEP_SECONDS = 0.3   # time between generations (bigger = slower)
+FADE = 0.2           # how fast cells fade in/out (smaller = softer, slower)
 DENSITY = 0.3        # fraction of cells alive in a new random world
 MAX_GENERATIONS = 1000
 HUE_STEP = 0.01      # how far the whole palette drifts each generation
