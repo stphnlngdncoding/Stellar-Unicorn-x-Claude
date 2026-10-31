@@ -1,15 +1,16 @@
 # Fireflies: a summer night over a meadow. Fireflies drift slowly through
-# the dark and signal in bursts of two, three or four blinks, each on its own
-# rhythm, leaving a short glowing streak while they're lit. Every firefly has
+# the dark. Every so often one lights up and stays lit for a few seconds,
+# glimmering as it flies and leaving a short glowing streak, then fades out. Every firefly has
 # its own colour and a depth: near ones are bigger, brighter, warmer and
 # quicker; far ones are small, dim, greener and drift slowly. Now and then
 # they all flash together in a wave that rolls across the board. A few stars
 # twinkle above the grass.
 #   A = set off a flash wave now
 #
-# PACE slows everything but the blinks themselves: at the very bottom the
-# fireflies barely creep and each one lights up only every few minutes, so
-# catching one is a little surprise.
+# PACE slows the dark drifting and how often they light up: at the very
+# bottom the fireflies barely creep and each one lights up only every few
+# minutes, so catching one is a little surprise. Lit ones always fly at
+# LIT_SPEED.
 #
 # Memory-friendly: positions are integers (1/4096 of a pixel), the trail is a
 # bytearray, and every pen is made once in setup().
@@ -17,18 +18,17 @@ import random
 from stellar import StellarUnicorn
 
 COUNT = 16           # how many fireflies
-PACE = 1.0           # overall speed: drifting and how often they blink (0.01 = almost never)
+PACE = 1.0           # overall speed: dark drifting and how often they light up (0.01 = almost never)
 MAX_SPEED = 9        # top speed for the nearest fireflies at PACE 1, 1/256 px per frame
-DARK = (70, 280)     # frames a firefly stays dark between bursts (min, max)
-BLINKS = (2, 4)      # blinks per burst (min, max)
+DARK = (70, 280)     # frames a firefly stays dark between lights at PACE 1 (min, max)
+LIT_S = (3.0, 6.0)   # seconds a firefly stays lit (min, max)
+LIT_SPEED = 150      # how fast lit fireflies fly, 1/4096 px per frame (150 is about 1 px a second)
 WAVE_S = (40, 90)    # seconds between flash waves (min, max)
 FRAME = 0.04
 LEVELS = 16
 
-# one blink: brightness 0..15 for each frame (rise, hold, fall), then a gap
-PULSE = bytes((2, 4, 7, 10, 13, 15, 15, 15, 15, 14, 12, 10, 8, 6, 5, 4, 3, 2, 1, 1))
-GAP = 9
-PERIOD = len(PULSE) + GAP
+RISE = 8             # frames to light up
+FALL = 20            # frames to fade out
 
 # depth layers: brightness, speed and halo for far, middle and near
 DEPTH_BRIGHT = (0.4, 0.7, 1.0)
@@ -52,8 +52,8 @@ def setup(su, g):
                 f = 12 - y if y < 12 else 0
                 BG.append(g.create_pen(f // 3, f // 2 + 1, 4 + f * 2))
     STAR = [g.create_pen(v * 9, v * 10, v * 14) for v in range(LEVELS)]
-    # each firefly: [x, y, vx, vy, countdown, burst frame (-1 = dark),
-    #                blinks, depth, glow pens, halo pens]
+    # each firefly: [x, y, vx, vy, countdown, lit frame (-1 = dark),
+    #                frames lit, depth, glow pens, halo pens, glimmer]
     flies = []
     for _ in range(COUNT):
         d = random.choice((0, 0, 1, 1, 1, 2, 2))
@@ -65,7 +65,7 @@ def setup(su, g):
         glow = [g.create_pen(int(r * m * v / 15), int(gg * m * v / 15), int(b * m * v / 15)) for v in range(LEVELS)]
         halo = [g.create_pen(int(r * m * v / 60), int(gg * m * v / 45), int(b * m * v / 60)) for v in range(LEVELS)]
         flies.append([random.randrange(16 << 12), random.randrange(1 << 12, 12 << 12),
-                      0, 0, dark_frames(), -1, 2, d, glow, halo])
+                      0, 0, dark_frames(), -1, 100, d, glow, halo, 12])
     flies.sort(key=lambda f: f[7])                   # far ones drawn first
     random.choice(flies)[4] = random.randint(25, 75) # one says hello early on
     trail = bytearray(256)
@@ -82,8 +82,8 @@ def wave():
     left = random.getrandbits(1)
     for f in flies:
         px = f[0] >> 12
-        f[4] = (px if left else 15 - px) * 4 + random.randrange(4)
-        f[5] = -1
+        if f[5] < 0:
+            f[4] = (px if left else 15 - px) * 4 + random.randrange(4)
 
 def frame(su, g, t):
     global next_wave, a_was, frames
@@ -118,13 +118,19 @@ def frame(su, g, t):
     # ---- fireflies ----
     for n in range(COUNT):
         f = flies[n]
-        top = int(MAX_SPEED * 16 * DEPTH_SPEED[f[7]] * PACE) or 1
+        lit = f[5] >= 0
+        if lit:
+            top = int(LIT_SPEED * DEPTH_SPEED[f[7]]) or 1
+            nudge = 32
+        else:
+            top = int(MAX_SPEED * 16 * DEPTH_SPEED[f[7]] * PACE) or 1
+            nudge = NUDGE
         # wander: nudge the velocity now and then, keep it gentle
         vx = f[2]
         vy = f[3]
         if fade:
-            vx += random.randint(-NUDGE, NUDGE)
-            vy += random.randint(-NUDGE, NUDGE)
+            vx += random.randint(-nudge, nudge)
+            vy += random.randint(-nudge, nudge)
         if vx > top:
             vx = top
         elif vx < -top:
@@ -145,20 +151,31 @@ def frame(su, g, t):
         f[1] = y
         f[2] = vx
         f[3] = vy
-        # blinking in bursts
-        if f[5] < 0:
+        # dark: count down to lighting up
+        if not lit:
             f[4] -= 1
             if f[4] <= 0:
                 f[5] = 0
-                f[6] = random.randint(BLINKS[0], BLINKS[1])
+                f[6] = int(random.uniform(LIT_S[0], LIT_S[1]) / FRAME)
             continue
-        p = f[5] % PERIOD
-        v = PULSE[p] if p < len(PULSE) else 0
-        f[5] += 1
-        if f[5] >= f[6] * PERIOD - GAP:
+        # lit: glimmer (a brightness that wanders, with the odd sparkle)
+        gl = f[10] + random.randint(-2, 2)
+        if gl < 8:
+            gl = 8
+        elif gl > 15:
+            gl = 15
+        f[10] = gl
+        v = 15 if random.getrandbits(5) == 0 else gl
+        k = f[5]
+        if k < RISE:
+            v = v * (k + 1) // RISE
+        elif k > f[6] - FALL:
+            v = v * (f[6] - k) // FALL
+        f[5] = k + 1
+        if f[5] >= f[6]:
             f[5] = -1
             f[4] = dark_frames()
-        if not v:
+        if v <= 0:
             continue
         px = (x + 2048) >> 12
         py = (y + 2048) >> 12
