@@ -32,7 +32,7 @@ KINDS = ("sun", "gas", "ringed", "ice", "moon")
 def setup(su, g):
     global BLACK, STARPEN, ROCK, HULL, WING, COCKPIT, COCKPIT2, NOSE, FLAME, SHIELD
     global stars, rocks, ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge
-    global shield, a_was, b_was
+    global last_threat, shield, a_was, b_was
     global body, body_x, next_body, order, next_rock, last_t
     BLACK = g.create_pen(0, 0, 0)
     STARPEN = [g.create_pen(b, b, min(255, b + 30)) for _, _, b in LAYERS]
