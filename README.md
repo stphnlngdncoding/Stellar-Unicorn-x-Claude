@@ -40,6 +40,10 @@ The board can't be reached from the internet, so it keeps a connection open to a
 
 After setup the board only needs USB power. Prefer to do it by hand? See [manual setup](GUIDE.md#manual-setup).
 
+### No Cloudflare? Run it locally
+
+[`local/`](local/README.md) is an alternative that needs only Python: a local MCP server for Claude Desktop or Claude Code, and the Unicorn Remote as a page on `localhost`. Both talk to the board directly over your Wi-Fi, so they only work at home, and not from your phone or claude.ai on the web.
+
 ## Example programs
 
 `board/programs/` has ready-made programs: Game of Life, plasma, lava lamp, silk tides, neon tunnel, driftfield, fractal, warp and more. Programs use a simple `setup()` / `frame()` contract; see [writing programs](GUIDE.md#writing-programs).

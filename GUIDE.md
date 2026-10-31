@@ -43,6 +43,10 @@ board/
   programs/          # example programs (life, lava lamp, fractal, warp, ...)
 remote/
   unicorn-remote.html # the Unicorn Remote artifact app (see below)
+local/               # no-Cloudflare alternative, Python only (see local/README.md)
+  unicorn_mcp.py     # local MCP server for Claude Desktop / Claude Code
+  serve.py           # serves remote.html on localhost and relays to the board
+  remote.html        # the Unicorn Remote, talking to the board over Wi-Fi
 cloud/
   src/worker.js      # Cloudflare Worker + Durable Object + MCP server
   setup.sh           # one-command deploy: generates secrets, writes board/_cloud.json
