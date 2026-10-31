@@ -1,12 +1,12 @@
 # Water jet: a jet of water spurts in from a random edge of the board, a
 # random size each time, and its droplets scatter, bounce around inside the
-# square and break up as they hit the edges. Gravity always pulls down, but
-# its strength changes with every spurt: some spurts land like heavy rain,
-# others float and drift around the board like the moon's pulling them.
+# square and break up as they hit the edges. Every spurt is a different
+# colour, so the colours mix where the water overlaps.
 #   A = spurt now
 #
 # Memory-friendly: droplets live in preallocated integer arrays (fixed point,
-# 1/256 px), the glow is a bytearray, and pens are made once.
+# 1/256 px), the glow and colour of each pixel are bytearrays, and pens are
+# made once.
 import random
 from array import array
 from stellar import StellarUnicorn
@@ -14,7 +14,8 @@ from stellar import StellarUnicorn
 MAX_DROPS = 140      # most droplets in the air at once
 SPURT_S = (1.2, 2.6) # how long each spurt lasts (seconds)
 PAUSE_S = (1.5, 4.0) # quiet time between spurts
-GRAVITY = (3, 40)    # gravity strength range, always downward (bigger = heavier)
+GRAVITY = 12         # how hard the water falls (bigger = heavier)
+COLOURS = 12         # number of different spurt colours
 BOUNCE = 185         # how bouncy the edges are (out of 256)
 TRAIL = 200          # how long droplet trails linger (out of 256, bigger = longer)
 FRAME = 0.03
@@ -23,30 +24,37 @@ ONE = 256            # fixed point: 1 pixel = 256
 EDGE = 16 * ONE - 1
 
 def setup(su, g):
-    global X, Y, VX, VY, LIFE, n, GLOW, PENS, BLACK, gx, gy, spurt, next_spurt, a_was
+    global X, Y, VX, VY, LIFE, HUE, n, GLOW, PIX, PENS, BLACK, spurt, next_spurt, a_was, colour
     X, Y = array("i", [0] * MAX_DROPS), array("i", [0] * MAX_DROPS)
     VX, VY = array("i", [0] * MAX_DROPS), array("i", [0] * MAX_DROPS)
     LIFE = bytearray(MAX_DROPS)
+    HUE = bytearray(MAX_DROPS)                   # each droplet's colour
     n = 0
-    GLOW = bytearray(256)
+    GLOW = bytearray(256)                        # brightness of each pixel
+    PIX = bytearray(256)                         # colour of each pixel
     BLACK = g.create_pen(0, 0, 0)
-    # deep water blue -> aqua -> white foam
-    stops = ((0, 6, 22), (0, 40, 110), (0, 120, 200), (60, 200, 240), (220, 250, 255))
+    # for each colour: deep -> rich -> bright -> white foam, 16 steps
     PENS = []
-    for k in range(32):
-        f = k / 31 * (len(stops) - 1)
-        i = min(int(f), len(stops) - 2); q = f - i
-        a, b = stops[i], stops[i + 1]
-        PENS.append(g.create_pen(*[int(a[c] + (b[c] - a[c]) * q) for c in range(3)]))
-    gx, gy = 0, 20
+    for h in range(COLOURS):
+        base = hsv(h / COLOURS)
+        for k in range(16):
+            f = (k + 1) / 16
+            w = max(0.0, f - 0.75) / 0.25 * 0.7      # the brightest steps foam towards white
+            PENS.append(g.create_pen(*[int(c * f + (255 - c * f) * w) for c in base]))
+    colour = random.randrange(COLOURS)
     spurt = None
     next_spurt = 0.5
     a_was = False
 
+def hsv(h):
+    i = int(h * 6); f = h * 6 - i
+    q, t = int(255 * (1 - f)), int(255 * f)
+    return ((255, t, 0), (q, 255, 0), (0, 255, t), (0, q, 255), (t, 0, 255), (255, 0, q))[i % 6]
+
 def new_spurt(t):
-    global gx, gy
-    # gravity changes strength with every spurt, but always pulls down
-    gx, gy = 0, random.randint(*GRAVITY)
+    global colour
+    # each spurt gets a new colour, well away from the last one
+    colour = (colour + random.randint(3, COLOURS - 3)) % COLOURS
     # the jet comes in from a random edge, pointing into the board
     side = random.randrange(4)
     p = random.randint(3, 12) * ONE + ONE // 2
@@ -60,15 +68,15 @@ def new_spurt(t):
         x, y, ax, ay = p, EDGE, 0, -1
     size = random.randint(1, 4)                  # 1 = a thin squirt, 4 = a fire hose
     return {"x": x, "y": y, "ax": ax, "ay": ay, "size": size,
-            "speed": random.randint(90, 150) + size * 15,
+            "speed": random.randint(170, 250) + size * 20,
             "aim": random.randint(-70, 70),      # tilt of the jet across its direction
             "until": t + random.uniform(*SPURT_S)}
 
-def add_drop(x, y, vx, vy, life):
+def add_drop(x, y, vx, vy, life, hue):
     global n
     if n >= MAX_DROPS:
         return
-    X[n], Y[n], VX[n], VY[n], LIFE[n] = x, y, vx, vy, life
+    X[n], Y[n], VX[n], VY[n], LIFE[n], HUE[n] = x, y, vx, vy, life, hue
     n += 1
 
 def frame(su, g, t):
@@ -88,7 +96,7 @@ def frame(su, g, t):
             side = s["aim"] + random.randint(-20 - 10 * s["size"], 20 + 10 * s["size"])
             jx = s["x"] + s["ay"] * random.randint(-s["size"], s["size"]) * 64
             jy = s["y"] + s["ax"] * random.randint(-s["size"], s["size"]) * 64
-            add_drop(jx, jy, s["ax"] * sp + s["ay"] * side, s["ay"] * sp + s["ax"] * side, 255)
+            add_drop(jx, jy, s["ax"] * sp + s["ay"] * side, s["ay"] * sp + s["ax"] * side, 255, colour)
         if t >= s["until"]:
             spurt = None
             next_spurt = t + random.uniform(*PAUSE_S)
@@ -96,7 +104,7 @@ def frame(su, g, t):
     # ---- droplets: gravity, bounces, break-ups ----
     i = 0
     while i < n:
-        vx, vy = VX[i] + gx, VY[i] + gy
+        vx, vy = VX[i], VY[i] + GRAVITY
         x, y = X[i] + vx, Y[i] + vy
         hit = 0
         if x < 0:
@@ -114,18 +122,19 @@ def frame(su, g, t):
         life = LIFE[i]
         if hit > 60 and life > 90 and n < MAX_DROPS:   # a hard hit breaks it into two
             add_drop(x, y, vy * 3 >> 3 if vy else random.randint(-40, 40),
-                     vx * 3 >> 3 if vx else random.randint(-40, 40), life - 40)
+                     vx * 3 >> 3 if vx else random.randint(-40, 40), life - 40, HUE[i])
         # resting water drains away; flying water lasts longer
         speed = abs(vx) + abs(vy)
         life -= 1 if speed > 40 else 7
         if life <= 0:
             n -= 1                                # swap the last droplet into this slot
-            X[i], Y[i], VX[i], VY[i], LIFE[i] = X[n], Y[n], VX[n], VY[n], LIFE[n]
+            X[i], Y[i], VX[i], VY[i], LIFE[i], HUE[i] = X[n], Y[n], VX[n], VY[n], LIFE[n], HUE[n]
             continue
         X[i], Y[i], VX[i], VY[i], LIFE[i] = x, y, vx, vy, life
         c = (y >> 8) * 16 + (x >> 8)
         b = GLOW[c] + 18 + (speed >> 2 if speed < 240 else 60) + (life >> 4)
         GLOW[c] = b if b < 255 else 255
+        PIX[c] = HUE[i]
         i += 1
 
     # ---- draw the glow, with fading trails ----
@@ -135,7 +144,7 @@ def frame(su, g, t):
         v = GLOW[c]
         if v:
             if v > 6:
-                g.set_pen(PENS[v >> 3])
+                g.set_pen(PENS[PIX[c] * 16 + (v >> 4)])
                 g.pixel(c & 15, c >> 4)
             GLOW[c] = v * TRAIL >> 8
     return FRAME
