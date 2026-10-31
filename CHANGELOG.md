@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Boat (2026-10-31)
+
+- **`boat.py`**: a sailboat rides the waves while the weather turns between sunny spells (blue sea, sun, white clouds) and storms (dark sky, slanting rain, whitecaps, the odd lightning flash), with the boat tossed and rolled harder as the sea builds. A = change the weather. Settings in the Remote.
+
 ## Hedge Maze (2026-10-31)
 
 - **`maze.py`**: a self-playing maze chase. A firefly collects dew drops in a freshly grown hedge maze while three spiders hunt it; it plans routes it can reach well ahead of the spiders, avoids dead ends, and runs for open ground when cornered. Pink berries give a speed boost. Clearing a maze grows a new one with quicker spiders; three catches and it starts over. In testing it clears a maze roughly every minute and a half and reaches level 3 or 4. A = new maze, B = faster. Settings in the Remote.
