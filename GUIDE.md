@@ -244,6 +244,8 @@ When writing your own programs, you can help by creating pens and lists in `setu
 
 The rotation is saved on the board as `board/programs/rotation.py`. It's a normal program that runs the others itself, so it works with any launcher version. Programs change on the clock, so it carries on where it was after a restart. Old-style programs are skipped.
 
+**Settings.** The Settings button on the now-playing card (or the Settings mode above the tiles) opens sliders and buttons for that program's adjustable constants: speeds, counts, timings, colours. A setting with a range, like "seconds between food", gets two sliders. *Play with these settings* rewrites those constant lines in the program's source on the board and starts it, *Save without playing* just saves, and *Defaults* puts back the values it ships with. The sliders for each program, and their safe ranges, are in `TUNE` in the script; to make a new program adjustable, add an entry there for each `NAME = value` line near the top of the program.
+
 To publish your own copy, ask Claude to publish the file as an artifact that declares the `mcp` capability for `stellar1` with the tools `get_board_status`, `run_program`, `stop_program`, `set_default_program`, `set_brightness`, `upload_program` and `get_program_source`. The first time you open it, claude.ai asks you to allow the connector for the page. To add a new program's name, colours and group, add a line to `CAT` at the top of the script.
 
 ## Self-healing
