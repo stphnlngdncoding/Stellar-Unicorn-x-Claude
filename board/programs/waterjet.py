@@ -1,7 +1,7 @@
 # Water jet: a jet of water spurts in from a random edge of the board, a
 # random size each time, and its droplets scatter, bounce around inside the
-# square and break up as they hit the edges. Every spurt is a different
-# colour, so the colours mix where the water overlaps.
+# square and break up as they hit the edges. Every spurt is a different pale,
+# spacey blue or green, so the colours mix where the water overlaps.
 #   A = spurt now
 #
 # Memory-friendly: droplets live in preallocated integer arrays (fixed point,
@@ -12,10 +12,12 @@ from array import array
 from stellar import StellarUnicorn
 
 MAX_DROPS = 90       # most droplets in the air at once (more = slower)
-SPURT_S = (1.2, 2.6) # how long each spurt lasts (seconds)
-PAUSE_S = (1.5, 4.0) # quiet time between spurts
+SPURT_S = (3.5, 6.5) # how long each spurt lasts (seconds)
+PAUSE_S = (5.0, 10.0) # quiet time between spurts
 GRAVITY = 12         # how hard the water falls (bigger = heavier)
-COLOURS = 12         # number of different spurt colours
+# pale space colours the spurts take turns with (r, g, b)
+PALETTE = ((150, 185, 255), (120, 215, 255), (110, 235, 225), (135, 240, 190),
+           (175, 245, 165), (165, 170, 255), (190, 225, 255), (120, 200, 210))
 BOUNCE = 185         # how bouncy the edges are (out of 256)
 TRAIL = 110          # how long droplet trails linger (out of 256, bigger = longer)
 FRAME = 0.03
@@ -35,26 +37,20 @@ def setup(su, g):
     BLACK = g.create_pen(0, 0, 0)
     # for each colour: deep -> rich -> bright -> white foam, 16 steps
     PENS = []
-    for h in range(COLOURS):
-        base = hsv(h / COLOURS)
+    for base in PALETTE:
         for k in range(16):
             f = (k + 1) / 16
             w = max(0.0, f - 0.75) / 0.25 * 0.7      # the brightest steps foam towards white
             PENS.append(g.create_pen(*[int(c * f + (255 - c * f) * w) for c in base]))
-    colour = random.randrange(COLOURS)
+    colour = random.randrange(len(PALETTE))
     spurt = None
     next_spurt = 0.5
     a_was = False
 
-def hsv(h):
-    i = int(h * 6); f = h * 6 - i
-    q, t = int(255 * (1 - f)), int(255 * f)
-    return ((255, t, 0), (q, 255, 0), (0, 255, t), (0, q, 255), (t, 0, 255), (255, 0, q))[i % 6]
-
 def new_spurt(t):
     global colour
-    # each spurt gets a new colour, well away from the last one
-    colour = (colour + random.randint(3, COLOURS - 3)) % COLOURS
+    # each spurt gets a different colour from the last one
+    colour = (colour + random.randint(1, len(PALETTE) - 1)) % len(PALETTE)
     # the jet comes in from a random edge, pointing into the board
     side = random.randrange(4)
     p = random.randint(3, 12) * ONE + ONE // 2
@@ -152,7 +148,7 @@ def frame(su, g, t):
                      vx * 3 >> 3 if vx else random.randint(-40, 40), life - 40, Ha[i])
         # resting water drains away; flying water lasts longer
         speed = (vx if vx > 0 else -vx) + (vy if vy > 0 else -vy)
-        life -= 1 if speed > 40 else 7
+        life -= 2 if speed > 40 else 7
         if life <= 0:
             n -= 1                                # move the last droplet into this slot
             Xa[i] = Xa[n]
