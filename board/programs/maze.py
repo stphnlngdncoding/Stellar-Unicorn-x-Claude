@@ -90,7 +90,9 @@ def new_maze(t):
             total += 1
     # the firefly starts in a corner, the spiders in the far ones
     corners = [(0, 0), (14, 0), (0, 14), (14, 14)]
-    random.shuffle(corners)
+    for i in range(3, 0, -1):                     # shuffle (MicroPython has no random.shuffle)
+        j = random.randrange(i + 1)
+        corners[i], corners[j] = corners[j], corners[i]
     px, py = corners[0]
     drop[py * 16 + px] = 0
     total -= 1
