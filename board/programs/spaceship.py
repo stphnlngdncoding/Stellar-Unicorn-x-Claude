@@ -2,10 +2,10 @@
 # stars stream past in three layers. Huge things drift by slowly in the
 # background: a blazing sun, banded gas giants, ringed planets, icy worlds and
 # cratered rocks, each in its own colours and sometimes with moons of its own.
-# Everything behind the ship is muted, and the ship has a thin dark outline,
-# so it stands out. The ship drifts forwards and backwards, and when an
-# asteroid tumbles in it picks a clear lane and swerves into it (if one ever
-# does clip it, its shield flashes).
+# Everything behind the ship is muted, and dimmed further in a thin halo
+# right around it, so it stands out. The ship drifts forwards and backwards,
+# and when an asteroid tumbles in it picks a clear lane and swerves into it
+# (if one ever does clip it, its shield flashes).
 #   A = send an asteroid   B = next planet
 #
 # Memory-friendly: each planet is drawn into a small bytearray mask once when
@@ -27,7 +27,7 @@ DRIFT_SPEED = 0.8    # how fast it drifts forwards and backwards, pixels a secon
 LOOKAHEAD = 12       # how far ahead the ship watches for asteroids (px)
 BACKDROP = 0.3       # brightness of everything behind the ship: stars, suns, planets (0..1)
 MUTE = 0.55          # how much colour is drained from the backdrop (0 = full colour, 1 = grey)
-OUTLINE = 1          # 1 = a thin dark outline around the ship so it pops, 0 = none
+OUTLINE = 0.6        # how much the backdrop is dimmed right around the ship (0 = not at all, 1 = black)
 FRAME = 0.04
 
 # star layers: (count, speed in px/s, brightness 0..255)
@@ -35,13 +35,15 @@ LAYERS = ((10, 0.7, 60), (8, 2.0, 120), (5, 5.0, 230))
 PLANETS = ("gas", "ringed", "ice", "moon", "gas", "moon")   # one round between suns, shuffled
 
 def setup(su, g):
-    global BLACK, STARPEN, ROCK, HULL, WING, COCKPIT, COCKPIT2, NOSE, FLAME, SHIELD
+    global BLACK, STARPEN, STARDIM, ROCKDIM, ROCK, HULL, WING, COCKPIT, COCKPIT2, NOSE, FLAME, SHIELD
     global stars, rocks, ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge
     global last_threat, shield, a_was, b_was
     global body, body_x, next_body, order, next_rock, last_t
     BLACK = g.create_pen(0, 0, 0)
     STARPEN = [g.create_pen(*muted((b, b, min(255, b + 30)))) for _, _, b in LAYERS]
     ROCK = (g.create_pen(60, 48, 40), g.create_pen(110, 92, 75), g.create_pen(170, 150, 125))
+    STARDIM = [g.create_pen(*shade(muted((b, b, min(255, b + 30))), 1 - OUTLINE)) for _, _, b in LAYERS]
+    ROCKDIM = g.create_pen(*shade((110, 92, 75), 1 - OUTLINE))
     HULL = (g.create_pen(175, 180, 200), g.create_pen(255, 255, 255))
     WING = g.create_pen(255, 25, 40)
     COCKPIT = g.create_pen(80, 245, 255)
@@ -94,7 +96,7 @@ MOONS = ((170, 165, 160), (215, 195, 150), (160, 190, 220), (200, 120, 90), (190
 
 def new_body(kind, g):
     """Draw a planet (and maybe its moons) into a mask: one pen index per pixel, 255 = empty."""
-    global body, body_x, body_y, half, BPENS
+    global body, body_x, body_y, half, BPENS, BDIM
     r = {"sun": 9, "gas": random.randint(5, 7), "ringed": random.randint(3, 5),
          "ice": random.randint(4, 6), "moon": random.randint(2, 4)}[kind]
     reach = r + (5 if kind == "ringed" else 2)
@@ -111,12 +113,15 @@ def new_body(kind, g):
     w = 2 * half + 1
     mask = bytearray(b"\xff" * (w * w))
     pens = []
+    dims = []                     # the same colours, dimmed for the halo round the ship
     cache = {}
 
     def pen(rgb):
         if rgb not in cache:
             cache[rgb] = len(pens)
-            pens.append(g.create_pen(*muted(rgb)))
+            m = muted(rgb)
+            pens.append(g.create_pen(*m))
+            dims.append(g.create_pen(*shade(m, 1 - OUTLINE)))
         return cache[rgb]
 
     if kind in ("gas", "ringed"):
@@ -172,6 +177,7 @@ def new_body(kind, g):
                     mask[k] = pen(shade(mc, 0.25 if ml < 0.25 else (1.0 if ml > 1.0 else ml)))
     body = (mask, w)
     BPENS = pens
+    BDIM = dims
     body_x = (16 + half) << 8
     body_y = random.randint(3, 12) if kind != "sun" else random.choice((3, 4, 11, 12))
 
@@ -231,6 +237,33 @@ SHAPE = ((0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1), (3, 1), (4, 1))
 RIM = tuple((x + dx, y + dy) for x, y in SHAPE for dx in (-1, 0, 1) for dy in (-1, 0, 1)
             if (x + dx, y + dy) not in SHAPE)
 RIM = tuple(sorted(set(RIM)))
+
+def halo(g, x, y):
+    """Redraw the backdrop at (x, y) in its dimmed colour."""
+    if not (0 <= x < 16 and 0 <= y < 16):
+        return
+    for r in rocks:
+        if r[4]:
+            rx = r[0] >> 8
+            if rx <= x < rx + r[3] and r[1] <= y < r[1] + r[3]:
+                g.set_pen(ROCKDIM)
+                g.pixel(x, y)
+                return
+    if body is not None:
+        mask, w = body
+        i = x - ((body_x >> 8) - half)
+        j = y - (body_y - half)
+        if 0 <= i < w and 0 <= j < w:
+            p = mask[j * w + i]
+            if p != 255:
+                g.set_pen(BDIM[p])
+                g.pixel(x, y)
+                return
+    for s in stars:
+        if s[1] == y and (s[0] >> 8) == x:
+            g.set_pen(STARDIM[s[2]])
+            g.pixel(x, y)
+            return
 
 def blocked(sx):
     """Rows (as bits) that asteroids ahead of the ship will pass through, plus a margin."""
@@ -354,11 +387,10 @@ def frame(su, g, t):
     for r in rocks:
         if r[4]:
             draw_rock(g, r)
-    # a dark outline keeps the backdrop off the ship
+    # a thin halo round the ship: whatever is behind it is drawn dimmer there
     if OUTLINE:
-        g.set_pen(BLACK)
         for x, y in RIM:
-            g.pixel(sx + x, sy + y)
+            halo(g, sx + x, sy + y)
     # engine flame flickers
     fl = random.getrandbits(2)
     g.set_pen(FLAME[0])
