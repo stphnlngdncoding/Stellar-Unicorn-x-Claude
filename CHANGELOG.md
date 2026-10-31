@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Life v2 (2026-10-31)
+
+- **`life2.py`**: rounds take turns. A mirror-symmetric still life (six found with a SAT solver) glows for 10 s, then a single dot drops in and breaks it apart; next, a fleet of gliders and lightweight spaceships flies around a wrapping board until they collide. A round ends when the world is empty, frozen or flipping between two states. Half the speed of `life.py`, with streaming rainbow colours. The Remote lists it under Games.
+
 ## v6.2.1 — Local mode (2026-10-31)
 
 - **`local/`: run everything without the Cloudflare Worker.** `unicorn_mcp.py` is a stdio MCP server (Python standard library only) with the same nine tools as the cloud connector, talking to the board's LAN API. `serve.py` serves `remote.html`, the Unicorn Remote, on `localhost:8765` and relays its calls to the board. Works on the same Wi-Fi only; see `local/README.md`. No board changes: the launcher already runs without `_cloud.json`.
