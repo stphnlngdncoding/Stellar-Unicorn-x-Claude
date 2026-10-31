@@ -24,7 +24,8 @@ from stellar import StellarUnicorn
 
 STEP_SECONDS = 0.6   # time between generations (life.py uses 0.3)
 CALM_SECONDS = 10    # how long the still life shows before the dot drops
-FADE = 40            # how fast cells fade in and out (out of 256 per frame)
+FADE = 40            # how fast cells fade in (out of 256 per frame)
+FADE_OUT = 10        # how fast dying cells fade away (smaller = longer, softer trails)
 HUE_SPEED = 5        # how fast the colours stream across the board (per frame, of 256)
 AGE_SHIFT = 23       # each generation a cell survives shifts its colour this much
 SHIPS = (3, 5)       # how many spaceships in a fleet
@@ -271,7 +272,7 @@ def frame(su, g, t):
     elif phase == "hold" and t - phase_t > 2.5:
         clear_world()
         phase, phase_t = "out", t
-    elif phase == "out" and t - phase_t > 1.5:
+    elif phase == "out" and t - phase_t > 4.0:
         if kind == "still":
             kind = "ships"
         else:
@@ -291,11 +292,11 @@ def frame(su, g, t):
             # colours stream through the field and jump as cells age
             col[k] = (POS[k] + drift + age[k] * AGE_SHIFT) & 255
         elif v:
-            v -= (v * FADE >> 8) + 1
+            v -= (v * FADE_OUT >> 8) + 1
             glow[k] = v if v > 0 else 0
             col[k] = (col[k] + 3) & 255     # dying cells keep shifting as they fade
         v = glow[k]
-        if v > 12:
+        if v > 6:
             g.set_pen(PENS[((col[k] * HUES >> 8) * WHITES + white[k]) * VALS + (v * VALS >> 8)])
             g.pixel(k & 15, k >> 4)
     return 0.03
