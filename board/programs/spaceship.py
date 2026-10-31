@@ -1,9 +1,11 @@
 # Spaceship: a little ship cruises through space, engine flickering, while
 # stars stream past in three layers. Huge things drift by slowly in the
-# background: a blazing sun, a banded gas giant, a ringed planet, an icy
-# world, a cratered moon. The ship drifts forwards and backwards, and when an
-# asteroid tumbles in it picks a clear lane and swerves into it (if one ever
-# does clip it, its shield flashes).
+# background: a blazing sun, banded gas giants, ringed planets, icy worlds and
+# cratered rocks, each in its own colours and sometimes with moons of its own.
+# Everything behind the ship is a little muted so the ship stands out. The
+# ship drifts forwards and backwards, and when an asteroid tumbles in it picks
+# a clear lane and swerves into it (if one ever does clip it, its shield
+# flashes).
 #   A = send an asteroid   B = next planet
 #
 # Memory-friendly: each planet is drawn into a small bytearray mask once when
@@ -23,11 +25,13 @@ DODGE_SPEED = 7.0    # how fast the ship swerves, pixels a second
 DRIFT = (2, 8)       # how far back and forward the ship wanders (its left edge, px)
 DRIFT_SPEED = 0.8    # how fast it drifts forwards and backwards, pixels a second
 LOOKAHEAD = 12       # how far ahead the ship watches for asteroids (px)
+BACKDROP = 0.45      # brightness of everything behind the ship: stars, suns, planets (0..1)
+MUTE = 0.4           # how much colour is drained from the backdrop (0 = full colour, 1 = grey)
 FRAME = 0.04
 
 # star layers: (count, speed in px/s, brightness 0..255)
 LAYERS = ((10, 0.7, 60), (8, 2.0, 120), (5, 5.0, 230))
-KINDS = ("sun", "gas", "ringed", "ice", "moon")
+PLANETS = ("gas", "ringed", "ice", "moon", "gas", "moon")   # one round between suns, shuffled
 
 def setup(su, g):
     global BLACK, STARPEN, ROCK, HULL, WING, COCKPIT, COCKPIT2, NOSE, FLAME, SHIELD
@@ -35,7 +39,7 @@ def setup(su, g):
     global last_threat, shield, a_was, b_was
     global body, body_x, next_body, order, next_rock, last_t
     BLACK = g.create_pen(0, 0, 0)
-    STARPEN = [g.create_pen(b, b, min(255, b + 30)) for _, _, b in LAYERS]
+    STARPEN = [g.create_pen(*muted((b, b, min(255, b + 30)))) for _, _, b in LAYERS]
     ROCK = (g.create_pen(60, 48, 40), g.create_pen(110, 92, 75), g.create_pen(170, 150, 125))
     HULL = (g.create_pen(150, 155, 170), g.create_pen(230, 235, 245))
     WING = g.create_pen(220, 40, 50)
@@ -57,7 +61,7 @@ def setup(su, g):
     next_cruise = 3.0
     shield = 0
     a_was = b_was = False
-    order = list(KINDS[1:]) + ["sun"]            # the sun comes round again every fifth
+    order = []
     body = None
     body_x = 0
     next_body = 0.5
@@ -66,14 +70,43 @@ def setup(su, g):
     new_body("sun", g)
 
 # ---------------------------------------------------------------- planets
+def muted(c):
+    """Backdrop colours: a little greyer and dimmer, so the ship stands out."""
+    grey = (c[0] + c[1] + c[2]) / 3
+    return tuple(int((v + (grey - v) * MUTE) * BACKDROP) for v in c)
+
 def shade(c, f):
     return (int(c[0] * f), int(c[1] * f), int(c[2] * f))
 
+# colour schemes: every planet that drifts by picks one at random
+GAS = (((215, 170, 110), (240, 215, 170), (200, 120, 70), (230, 190, 130), (170, 100, 60)),   # tan
+       ((60, 110, 220), (90, 150, 240), (50, 80, 180), (120, 170, 245)),                       # deep blue
+       ((150, 90, 200), (190, 140, 230), (110, 60, 170), (210, 170, 240)),                      # violet
+       ((60, 180, 160), (110, 215, 190), (40, 130, 120), (150, 230, 205)),                      # teal
+       ((220, 120, 140), (240, 170, 180), (180, 80, 110), (250, 200, 205)),                     # rose
+       ((230, 200, 80), (245, 225, 140), (200, 150, 50)))                                      # gold
+RINGS = ((230, 205, 150), (200, 220, 240), (240, 180, 200), (180, 240, 220), (220, 220, 220))
+ICE = (((170, 215, 255), (200, 230, 255)), ((170, 255, 220), (210, 255, 235)),
+       ((210, 190, 255), (230, 215, 255)), ((200, 240, 255), (235, 250, 255)))
+ROCKY = ((150, 145, 140), (200, 95, 60), (190, 160, 90), (120, 150, 110), (170, 120, 170), (110, 120, 150))
+MOONS = ((170, 165, 160), (215, 195, 150), (160, 190, 220), (200, 120, 90), (190, 180, 210))
+
 def new_body(kind, g):
-    """Draw a planet into a mask: one pen index per pixel, 255 = empty."""
+    """Draw a planet (and maybe its moons) into a mask: one pen index per pixel, 255 = empty."""
     global body, body_x, body_y, half, BPENS
-    r = {"sun": 9, "gas": 6, "ringed": 4, "ice": 5, "moon": 3}[kind]
-    half = r + (5 if kind == "ringed" else 2)
+    r = {"sun": 9, "gas": random.randint(5, 7), "ringed": random.randint(3, 5),
+         "ice": random.randint(4, 6), "moon": random.randint(2, 4)}[kind]
+    reach = r + (5 if kind == "ringed" else 2)
+    # moons: one or two small ones nearby, each its own colour
+    moons = []
+    if kind != "sun":
+        for _ in range(random.choice((0, 1, 1, 2))):
+            a = random.uniform(0, 6.283)
+            dist = r + random.uniform(2.5, 4.5) + (3 if kind == "ringed" else 0)
+            mr = random.choice((1, 1, 1.6, 2))
+            moons.append((math.cos(a) * dist, math.sin(a) * dist * 0.7, mr, random.choice(MOONS)))
+            reach = max(reach, int(dist + mr + 1))
+    half = reach
     w = 2 * half + 1
     mask = bytearray(b"\xff" * (w * w))
     pens = []
@@ -82,14 +115,17 @@ def new_body(kind, g):
     def pen(rgb):
         if rgb not in cache:
             cache[rgb] = len(pens)
-            pens.append(g.create_pen(*rgb))
+            pens.append(g.create_pen(*muted(rgb)))
         return cache[rgb]
 
-    bands = {"gas": ((215, 170, 110), (240, 215, 170), (200, 120, 70), (230, 190, 130), (170, 100, 60)),
-             "ringed": ((70, 170, 190), (110, 200, 210), (60, 130, 170)),
-             "ice": ((170, 215, 255), (200, 230, 255)),
-             "moon": ((150, 145, 140),)}.get(kind)
-    craters = [(random.uniform(-2, 2), random.uniform(-2, 2)) for _ in range(3)]
+    if kind in ("gas", "ringed"):
+        bands = random.choice(GAS)
+    elif kind == "ice":
+        bands = random.choice(ICE)
+    else:
+        bands = (random.choice(ROCKY),)
+    ring = random.choice(RINGS)
+    craters = [(random.uniform(-r + 1, r - 1), random.uniform(-r + 1, r - 1)) for _ in range(r)]
     tilt = random.uniform(-0.35, 0.35)
     for j in range(w):
         for i in range(w):
@@ -119,7 +155,7 @@ def new_body(kind, g):
                     c = bands[0]
                     for cx, cy in craters:
                         if (dx - cx) ** 2 + (dy - cy) ** 2 < 0.8:
-                            c = (100, 95, 92)
+                            c = shade(bands[0], 0.65)
                 mask[k] = pen(shade(c, light))
             if kind == "ringed":
                 # a tilted ring; the half nearer to us is drawn over the planet
@@ -127,7 +163,12 @@ def new_body(kind, g):
                 ry = dy - dx * tilt
                 e = (rx / (r + 4.5)) ** 2 + (ry / 1.6) ** 2
                 if 0.55 <= e <= 1.1 and (d > r or ry > 0):
-                    mask[k] = pen(shade((230, 205, 150), 0.45 + 0.4 * (dx + half) / w))
+                    mask[k] = pen(shade(ring, 0.45 + 0.4 * (dx + half) / w))
+            for mx, my, mr, mc in moons:
+                ex, ey = dx - mx, dy - my
+                if ex * ex + ey * ey <= mr * mr + 0.3 and mask[k] == 255:
+                    ml = 0.55 + 0.45 * (ex * 0.75 - ey * 0.55) / (mr + 0.5)
+                    mask[k] = pen(shade(mc, 0.25 if ml < 0.25 else (1.0 if ml > 1.0 else ml)))
     body = (mask, w)
     BPENS = pens
     body_x = (16 + half) << 8
@@ -202,7 +243,7 @@ def free(m, y):
 
 def frame(su, g, t):
     global ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge, last_threat, shield
-    global a_was, b_was, body, body_x, next_body, next_rock, last_t
+    global a_was, b_was, body, body_x, next_body, next_rock, last_t, order
     dt = t - last_t
     if dt > 0.1:
         dt = 0.1          # after a pause, carry on instead of jumping ahead
@@ -218,9 +259,13 @@ def frame(su, g, t):
 
     # planets come and go
     if body is None and t >= next_body:
-        kind = order.pop(0)
-        order.append(kind)
-        new_body(kind, g)
+        if not order:
+            order = list(PLANETS)
+            for i in range(len(order) - 1, 0, -1):
+                j = random.randrange(i + 1)
+                order[i], order[j] = order[j], order[i]
+            order.append("sun")                   # a sun after every round of planets
+        new_body(order.pop(0), g)
     if body is not None:
         body_x -= int(PLANET_SPEED * SPEED * dt * 256) or 1
         if (body_x >> 8) < -half - 1:
