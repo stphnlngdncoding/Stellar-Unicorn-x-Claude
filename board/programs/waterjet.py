@@ -14,7 +14,7 @@ from stellar import StellarUnicorn
 MAX_DROPS = 90       # most droplets in the air at once (more = slower)
 SPURT_S = (3.5, 6.5) # how long each spurt lasts (seconds)
 PAUSE_S = (5.0, 10.0) # quiet time between spurts
-GRAVITY = 12         # how hard the water falls (bigger = heavier)
+GRAVITY = 7          # how hard the water falls (bigger = heavier)
 # pale space colours the spurts take turns with (r, g, b)
 PALETTE = ((150, 185, 255), (120, 215, 255), (110, 235, 225), (135, 240, 190),
            (175, 245, 165), (165, 170, 255), (190, 225, 255), (120, 200, 210))
@@ -64,8 +64,8 @@ def new_spurt(t):
         x, y, ax, ay = p, EDGE, 0, -1
     size = random.randint(1, 4)                  # 1 = a thin squirt, 4 = a fire hose
     return {"x": x, "y": y, "ax": ax, "ay": ay, "size": size,
-            "speed": random.randint(170, 250) + size * 20,
-            "aim": random.randint(-70, 70),      # tilt of the jet across its direction
+            "speed": random.randint(128, 188) + size * 15,
+            "aim": random.randint(-52, 52),      # tilt of the jet across its direction
             "until": t + random.uniform(*SPURT_S)}
 
 def add_drop(x, y, vx, vy, life, hue):
@@ -93,8 +93,8 @@ def frame(su, g, t):
     if spurt:
         s = spurt
         for _ in range(s["size"]):
-            sp = s["speed"] + random.randint(-20, 20)
-            side = s["aim"] + random.randint(-20 - 10 * s["size"], 20 + 10 * s["size"])
+            sp = s["speed"] + random.randint(-15, 15)
+            side = s["aim"] + random.randint(-15 - 8 * s["size"], 15 + 8 * s["size"])
             jx = s["x"] + s["ay"] * random.randint(-s["size"], s["size"]) * 64
             jy = s["y"] + s["ax"] * random.randint(-s["size"], s["size"]) * 64
             add_drop(jx, jy, s["ax"] * sp + s["ay"] * side, s["ay"] * sp + s["ax"] * side, 255, colour)
@@ -132,7 +132,7 @@ def frame(su, g, t):
             if h2 > hit:
                 hit = h2
             vy = -vy * BOUNCE >> 8
-            if h2 > 30:                           # splashes scatter sideways off the floor
+            if h2 > 22:                           # splashes scatter sideways off the floor
                 vx += random.randint(-h2, h2) >> 1
         if x < 0:
             x = 0
@@ -143,12 +143,12 @@ def frame(su, g, t):
         elif y > EDGE:
             y = EDGE
         life = La[i]
-        if hit > 60 and life > 90 and n < MAX_DROPS:   # a hard hit breaks it into two
-            add_drop(x, y, vy * 3 >> 3 if vy else random.randint(-40, 40),
-                     vx * 3 >> 3 if vx else random.randint(-40, 40), life - 40, Ha[i])
+        if hit > 45 and life > 90 and n < MAX_DROPS:   # a hard hit breaks it into two
+            add_drop(x, y, vy * 3 >> 3 if vy else random.randint(-30, 30),
+                     vx * 3 >> 3 if vx else random.randint(-30, 30), life - 40, Ha[i])
         # resting water drains away; flying water lasts longer
         speed = (vx if vx > 0 else -vx) + (vy if vy > 0 else -vy)
-        life -= 2 if speed > 40 else 7
+        life -= 2 if speed > 30 else 7
         if life <= 0:
             n -= 1                                # move the last droplet into this slot
             Xa[i] = Xa[n]
@@ -164,7 +164,7 @@ def frame(su, g, t):
         VYa[i] = vy
         La[i] = life
         c = (y >> 8) * 16 + (x >> 8)
-        b = Ga[c] + 18 + (speed >> 2 if speed < 240 else 60) + (life >> 4)
+        b = Ga[c] + 18 + (speed // 3 if speed < 180 else 60) + (life >> 4)
         Ga[c] = b if b < 255 else 255
         Pa[c] = Ha[i]
         i += 1
