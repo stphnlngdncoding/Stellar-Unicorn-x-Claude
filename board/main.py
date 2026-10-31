@@ -37,8 +37,9 @@
 
 import os, sys, time, gc, json, math, machine, micropython
 
-VERSION = "6.2.2"
+VERSION = "6.2.3"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
+LOW_FLASH_KB = 200              # blink a warning border when free storage drops below this
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
 SELF_RESET = "_self_reset"       # set just before a deliberate self-heal restart
 CLOUD_SILENT_S = 300             # no cloud contact this long (Wi-Fi up) -> restart
@@ -177,6 +178,8 @@ def launcher():
         "asleep": False,
         "hold": False,        # pause frames so the cloud connection can get memory
         "loading": 0,         # ticks_ms deadline: show the loader until the cloud connection is made
+        "low_flash": False,   # storage is nearly full
+        "flash_check": time.ticks_ms(),  # when to check storage next
         "wlan": None,
         "last_ok": time.time(),
         "what": None,         # what the user chose: a program or a playlist
@@ -240,6 +243,33 @@ def launcher():
         if st["loading"]:
             st["loading"] = 0
             st["start"] = time.ticks_ms()     # the program starts fresh, without the stutter
+
+    # ---------- low storage warning ----------
+    # Once a minute the launcher checks how much storage is free. If it's
+    # below LOW_FLASH_KB, an orange border blinks four times every 45 seconds
+    # over whatever is playing, until programs are deleted.
+    def flash_free_kb():
+        try:
+            s = os.statvfs("/")
+            return s[0] * s[3] // 1024
+        except Exception:
+            return 99999
+
+    def low_flash_overlay():
+        now = time.ticks_ms()
+        if time.ticks_diff(now, st["flash_check"]) >= 0:
+            st["flash_check"] = time.ticks_add(now, 60000)
+            st["low_flash"] = flash_free_kb() < LOW_FLASH_KB
+        if not st["low_flash"]:
+            return
+        phase = (now // 200) % 225
+        if phase < 8 and phase % 2 == 0:
+            g.set_pen(g.create_pen(255, 80, 0))
+            for i in range(16):
+                g.pixel(i, 0)
+                g.pixel(i, 15)
+                g.pixel(0, i)
+                g.pixel(15, i)
 
     def start_program(name, managed=False):
         """Load and start a contract program. Returns None or an error string.
@@ -460,6 +490,7 @@ def launcher():
                 try:
                     t = time.ticks_diff(time.ticks_ms(), st["start"]) / 1000
                     d = env["frame"](su, g, t)
+                    low_flash_overlay()
                     su.update(g)
                     if isinstance(d, (int, float)) and d >= 0:
                         delay = d

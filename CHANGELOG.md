@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.2.3 / v6.1.2: low storage warning (2026-10-31)
+
+- Once a minute the launcher checks free storage. Below 200 KB (`LOW_FLASH_KB`), an orange border blinks four times every 45 seconds over whatever is playing, until programs are deleted. Programs are typically 5 to 15 KB and the board has about 1.6 MB free, so it's a safety net, not something to expect soon.
+- `board/main.py` is v6.2.3; boards on v6.1.1 upgrade with `board/upgrades/install_v612.py`.
+
 ## Spaceship polish (2026-10-31)
 
 - `spaceship.py`: the backdrop (stars, suns, planets) is muted and greyer, and dimmed a little more in a thin halo right round the ship, so the ship stands out. Planets come in many colour schemes and sizes, often with one or two moons, and a sun follows each round of six planets. The ship is brighter. New Settings: background brightness, colour drain and halo dimming.
