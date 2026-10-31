@@ -11,7 +11,7 @@ import random
 from array import array
 from stellar import StellarUnicorn
 
-MAX_DROPS = 140      # most droplets in the air at once
+MAX_DROPS = 90       # most droplets in the air at once (more = slower)
 SPURT_S = (1.2, 2.6) # how long each spurt lasts (seconds)
 PAUSE_S = (1.5, 4.0) # quiet time between spurts
 GRAVITY = 12         # how hard the water falls (bigger = heavier)
@@ -76,7 +76,12 @@ def add_drop(x, y, vx, vy, life, hue):
     global n
     if n >= MAX_DROPS:
         return
-    X[n], Y[n], VX[n], VY[n], LIFE[n], HUE[n] = x, y, vx, vy, life, hue
+    X[n] = x
+    Y[n] = y
+    VX[n] = vx
+    VY[n] = vy
+    LIFE[n] = life
+    HUE[n] = hue
     n += 1
 
 def frame(su, g, t):
@@ -102,39 +107,70 @@ def frame(su, g, t):
             next_spurt = t + random.uniform(*PAUSE_S)
 
     # ---- droplets: gravity, bounces, break-ups ----
+    # (local names and plain assignments keep this loop fast on the board)
+    Xa, Ya, VXa, VYa, La, Ha, Ga, Pa = X, Y, VX, VY, LIFE, HUE, GLOW, PIX
     i = 0
     while i < n:
-        vx, vy = VX[i], VY[i] + GRAVITY
-        x, y = X[i] + vx, Y[i] + vy
+        vx = VXa[i]
+        vy = VYa[i] + GRAVITY
+        x = Xa[i] + vx
+        y = Ya[i] + vy
         hit = 0
         if x < 0:
-            x, vx, hit = -x, -vx * BOUNCE >> 8, abs(vx)
+            x = -x
+            hit = vx if vx > 0 else -vx
+            vx = -vx * BOUNCE >> 8
         elif x > EDGE:
-            x, vx, hit = 2 * EDGE - x, -vx * BOUNCE >> 8, abs(vx)
+            x = 2 * EDGE - x
+            hit = vx if vx > 0 else -vx
+            vx = -vx * BOUNCE >> 8
         if y < 0:
-            y, vy, hit = -y, -vy * BOUNCE >> 8, max(hit, abs(vy))
+            y = -y
+            h2 = vy if vy > 0 else -vy
+            if h2 > hit:
+                hit = h2
+            vy = -vy * BOUNCE >> 8
         elif y > EDGE:
-            y, vy, hit = 2 * EDGE - y, -vy * BOUNCE >> 8, max(hit, abs(vy))
-            if hit > 30:                          # splashes scatter sideways off the floor
-                vx += random.randint(-hit, hit) >> 1
-        x = 0 if x < 0 else EDGE if x > EDGE else x
-        y = 0 if y < 0 else EDGE if y > EDGE else y
-        life = LIFE[i]
+            y = 2 * EDGE - y
+            h2 = vy if vy > 0 else -vy
+            if h2 > hit:
+                hit = h2
+            vy = -vy * BOUNCE >> 8
+            if h2 > 30:                           # splashes scatter sideways off the floor
+                vx += random.randint(-h2, h2) >> 1
+        if x < 0:
+            x = 0
+        elif x > EDGE:
+            x = EDGE
+        if y < 0:
+            y = 0
+        elif y > EDGE:
+            y = EDGE
+        life = La[i]
         if hit > 60 and life > 90 and n < MAX_DROPS:   # a hard hit breaks it into two
             add_drop(x, y, vy * 3 >> 3 if vy else random.randint(-40, 40),
-                     vx * 3 >> 3 if vx else random.randint(-40, 40), life - 40, HUE[i])
+                     vx * 3 >> 3 if vx else random.randint(-40, 40), life - 40, Ha[i])
         # resting water drains away; flying water lasts longer
-        speed = abs(vx) + abs(vy)
+        speed = (vx if vx > 0 else -vx) + (vy if vy > 0 else -vy)
         life -= 1 if speed > 40 else 7
         if life <= 0:
-            n -= 1                                # swap the last droplet into this slot
-            X[i], Y[i], VX[i], VY[i], LIFE[i], HUE[i] = X[n], Y[n], VX[n], VY[n], LIFE[n], HUE[n]
+            n -= 1                                # move the last droplet into this slot
+            Xa[i] = Xa[n]
+            Ya[i] = Ya[n]
+            VXa[i] = VXa[n]
+            VYa[i] = VYa[n]
+            La[i] = La[n]
+            Ha[i] = Ha[n]
             continue
-        X[i], Y[i], VX[i], VY[i], LIFE[i] = x, y, vx, vy, life
+        Xa[i] = x
+        Ya[i] = y
+        VXa[i] = vx
+        VYa[i] = vy
+        La[i] = life
         c = (y >> 8) * 16 + (x >> 8)
-        b = GLOW[c] + 18 + (speed >> 2 if speed < 240 else 60) + (life >> 4)
-        GLOW[c] = b if b < 255 else 255
-        PIX[c] = HUE[i]
+        b = Ga[c] + 18 + (speed >> 2 if speed < 240 else 60) + (life >> 4)
+        Ga[c] = b if b < 255 else 255
+        Pa[c] = Ha[i]
         i += 1
 
     # ---- draw the glow, with fading trails ----
