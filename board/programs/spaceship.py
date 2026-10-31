@@ -2,10 +2,10 @@
 # stars stream past in three layers. Huge things drift by slowly in the
 # background: a blazing sun, banded gas giants, ringed planets, icy worlds and
 # cratered rocks, each in its own colours and sometimes with moons of its own.
-# Everything behind the ship is a little muted so the ship stands out. The
-# ship drifts forwards and backwards, and when an asteroid tumbles in it picks
-# a clear lane and swerves into it (if one ever does clip it, its shield
-# flashes).
+# Everything behind the ship is muted, and the ship has a thin dark outline,
+# so it stands out. The ship drifts forwards and backwards, and when an
+# asteroid tumbles in it picks a clear lane and swerves into it (if one ever
+# does clip it, its shield flashes).
 #   A = send an asteroid   B = next planet
 #
 # Memory-friendly: each planet is drawn into a small bytearray mask once when
@@ -25,8 +25,9 @@ DODGE_SPEED = 7.0    # how fast the ship swerves, pixels a second
 DRIFT = (2, 8)       # how far back and forward the ship wanders (its left edge, px)
 DRIFT_SPEED = 0.8    # how fast it drifts forwards and backwards, pixels a second
 LOOKAHEAD = 12       # how far ahead the ship watches for asteroids (px)
-BACKDROP = 0.45      # brightness of everything behind the ship: stars, suns, planets (0..1)
-MUTE = 0.4           # how much colour is drained from the backdrop (0 = full colour, 1 = grey)
+BACKDROP = 0.3       # brightness of everything behind the ship: stars, suns, planets (0..1)
+MUTE = 0.55          # how much colour is drained from the backdrop (0 = full colour, 1 = grey)
+OUTLINE = 1          # 1 = a thin dark outline around the ship so it pops, 0 = none
 FRAME = 0.04
 
 # star layers: (count, speed in px/s, brightness 0..255)
@@ -41,10 +42,10 @@ def setup(su, g):
     BLACK = g.create_pen(0, 0, 0)
     STARPEN = [g.create_pen(*muted((b, b, min(255, b + 30)))) for _, _, b in LAYERS]
     ROCK = (g.create_pen(60, 48, 40), g.create_pen(110, 92, 75), g.create_pen(170, 150, 125))
-    HULL = (g.create_pen(150, 155, 170), g.create_pen(230, 235, 245))
-    WING = g.create_pen(220, 40, 50)
-    COCKPIT = g.create_pen(60, 220, 255)
-    COCKPIT2 = g.create_pen(20, 110, 160)
+    HULL = (g.create_pen(175, 180, 200), g.create_pen(255, 255, 255))
+    WING = g.create_pen(255, 25, 40)
+    COCKPIT = g.create_pen(80, 245, 255)
+    COCKPIT2 = g.create_pen(30, 150, 215)
     NOSE = g.create_pen(255, 255, 255)
     FLAME = (g.create_pen(255, 230, 120), g.create_pen(255, 130, 20), g.create_pen(150, 40, 0))
     SHIELD = g.create_pen(120, 200, 255)
@@ -226,6 +227,11 @@ def draw_rock(g, r):
 # A two-pixel-tall fighter seen from the side, top-left corner at (sx, sy):
 #   fin  hull  cockpit cockpit
 #   fin  hull  hull    hull    nose
+SHAPE = ((0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1), (3, 1), (4, 1))
+RIM = tuple((x + dx, y + dy) for x, y in SHAPE for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+            if (x + dx, y + dy) not in SHAPE)
+RIM = tuple(sorted(set(RIM)))
+
 def blocked(sx):
     """Rows (as bits) that asteroids ahead of the ship will pass through, plus a margin."""
     m = 0
@@ -348,6 +354,11 @@ def frame(su, g, t):
     for r in rocks:
         if r[4]:
             draw_rock(g, r)
+    # a dark outline keeps the backdrop off the ship
+    if OUTLINE:
+        g.set_pen(BLACK)
+        for x, y in RIM:
+            g.pixel(sx + x, sy + y)
     # engine flame flickers
     fl = random.getrandbits(2)
     g.set_pen(FLAME[0])
