@@ -8,8 +8,8 @@
 #   the board, wrapping around the edges, until they crash into each other.
 #
 # A round ends when the world is empty, frozen, or flipping between two
-# states (or stuck in a longer loop); it holds a moment, fades out, and the
-# other kind of round begins.
+# states (or stuck in a longer loop); it holds a moment, the board goes dark,
+# and the other kind of round begins. Cells switch on and off instantly.
 #   A = drop the dot now   B = next round   C = pause / resume
 #
 # The six still lifes were found with a SAT solver (every cell checked
@@ -24,8 +24,6 @@ from stellar import StellarUnicorn
 
 STEP_SECONDS = 0.6   # time between generations (life.py uses 0.3)
 CALM_SECONDS = 10    # how long the still life shows before the dot drops
-FADE = 40            # how fast cells fade in (out of 256 per frame)
-FADE_OUT = 10        # how fast dying cells fade away (smaller = longer, softer trails)
 HUE_SPEED = 5        # how fast the colours stream across the board (per frame, of 256)
 AGE_SHIFT = 23       # each generation a cell survives shifts its colour this much
 SHIPS = (3, 5)       # how many spaceships in a fleet
@@ -58,7 +56,7 @@ WHITES = 2           # newborns flash white for one step, then go full colour
 S = 18               # padded row length
 
 def setup(su, g):
-    global BLACK, PENS, IDX, OFFS, POS, alive, nxt, age, glow, col, white, prev1, prev2, hist
+    global BLACK, PENS, IDX, OFFS, POS, alive, nxt, age, white, prev1, prev2, hist
     global hist_n, snap, prev_btn, pattern, kind, phase, phase_t, next_step, generation, drift, paused, wrap
     BLACK = g.create_pen(0, 0, 0)
     PENS = []
@@ -86,8 +84,6 @@ def setup(su, g):
     alive = bytearray(S * S)
     nxt = bytearray(S * S)
     age = bytearray(256)
-    glow = bytearray(256)
-    col = bytearray(256)       # hue last shown, kept while a cell fades out
     white = bytearray(256)     # newborn whiteness, counts down
     prev1 = bytearray(S * S)
     prev2 = bytearray(S * S)
@@ -123,7 +119,7 @@ def start(t):
         wrap = True
         launch_fleet()
         phase = "run"
-        next_step = t + 2.0          # let the fleet fade in first
+        next_step = t + 2.0          # show the fleet for a moment first
     phase_t = t
     generation = 0
     hist_n = 0
@@ -183,7 +179,6 @@ def drop_dot():
     alive[i] = 1
     age[k] = 1
     white[k] = WHITES - 1
-    glow[k] = 255
 
 def fill_border():
     # copy the opposite edges into the border so the world wraps
@@ -272,7 +267,7 @@ def frame(su, g, t):
     elif phase == "hold" and t - phase_t > 2.5:
         clear_world()
         phase, phase_t = "out", t
-    elif phase == "out" and t - phase_t > 4.0:
+    elif phase == "out" and t - phase_t > 1.0:
         if kind == "still":
             kind = "ships"
         else:
@@ -285,18 +280,9 @@ def frame(su, g, t):
     g.set_pen(BLACK)
     g.clear()
     for k in range(256):
-        v = glow[k]
         if alive[IDX[k]]:
-            v += ((255 - v) * FADE >> 8) + 1
-            glow[k] = v if v < 255 else 255
             # colours stream through the field and jump as cells age
-            col[k] = (POS[k] + drift + age[k] * AGE_SHIFT) & 255
-        elif v:
-            v -= (v * FADE_OUT >> 8) + 1
-            glow[k] = v if v > 0 else 0
-            col[k] = (col[k] + 3) & 255     # dying cells keep shifting as they fade
-        v = glow[k]
-        if v > 6:
-            g.set_pen(PENS[((col[k] * HUES >> 8) * WHITES + white[k]) * VALS + (v * VALS >> 8)])
+            h = (POS[k] + drift + age[k] * AGE_SHIFT) & 255
+            g.set_pen(PENS[((h * HUES >> 8) * WHITES + white[k]) * VALS + VALS - 1])
             g.pixel(k & 15, k >> 4)
     return 0.03

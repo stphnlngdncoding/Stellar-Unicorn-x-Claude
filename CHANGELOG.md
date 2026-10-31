@@ -5,6 +5,12 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Fireflies and ant farm (2026-10-31)
+
+- **`fireflies.py`**: fireflies with their own colours and three depths drift over a night meadow and blink in bursts of two to four, with an occasional flash wave across the board.
+- **`antfarm.py`**: ants dig tunnels, carry sand up to a mound, fetch food for the queen, and her eggs hatch into new ants; a fresh farm starts when the sand is half dug out.
+- `life2.py`: no fading; cells switch on and off instantly.
+
 ## Life v2 (2026-10-31)
 
 - **`life2.py`**: rounds take turns. A mirror-symmetric still life (six found with a SAT solver) glows for 10 s, then a single dot drops in and breaks it apart; next, a fleet of gliders and lightweight spaceships flies around a wrapping board until they collide. A round ends when the world is empty, frozen or flipping between two states. Half the speed of `life.py`, with streaming rainbow colours. The Remote lists it under Games.
