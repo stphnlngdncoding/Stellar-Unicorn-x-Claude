@@ -5,7 +5,7 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
-## Local mode (2026-10-31)
+## v6.2.1 — Local mode (2026-10-31)
 
 - **`local/`: run everything without the Cloudflare Worker.** `unicorn_mcp.py` is a stdio MCP server (Python standard library only) with the same nine tools as the cloud connector, talking to the board's LAN API. `serve.py` serves `remote.html`, the Unicorn Remote, on `localhost:8765` and relays its calls to the board. Works on the same Wi-Fi only; see `local/README.md`. No board changes: the launcher already runs without `_cloud.json`.
 - New programs since the cleanup: `waterjet.py`, `sand.py`, `tetris.py`; `life.py` rewritten with integer buffers. The Remote lists sand and tetris.
