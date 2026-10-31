@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Marquee (2026-10-31)
+
+- **`marquee.py`**: scrolls a message with bobbing letters, soft shadows, dancing colours (rainbow, neon, warm, cool or white) and twinkling sparkles. A = pause.
+- **Marquee card in the Unicorn Remote** (artifact and `local/`): type a message, pick colours and speed, press *Show on board* (or Enter). Curly quotes and dashes become plain ones, and characters the board's font can't draw (like emoji) are dropped. The card fills in the message that's on the board. Marquee also has Settings for bounce, sparkles and more.
+
 ## v6.2.3 / v6.1.2: low storage warning (2026-10-31)
 
 - Once a minute the launcher checks free storage. Below 200 KB (`LOW_FLASH_KB`), an orange border blinks four times every 45 seconds over whatever is playing, until programs are deleted. Programs are typically 5 to 15 KB and the board has about 1.6 MB free, so it's a safety net, not something to expect soon.
