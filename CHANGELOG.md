@@ -5,6 +5,12 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Starfall and spaceship (2026-10-31)
+
+- **`starfall.py`**: twinkling stars over dark hills, shooting stars with fading tails, golden fireballs and meteor showers.
+- **`spaceship.py`**: a little ship flies through parallax stars, swerving around asteroids, while a sun, gas giant, ringed planet, icy world and cratered moon drift by in the background.
+- `fireflies.py`: lit fireflies stay lit, glimmer and zip about; new PACE, LIT_S and LIT_SPEED settings. Both new programs have Settings in the Remote.
+
 ## Program settings in the Remote (2026-10-31)
 
 - **Settings** in the Unicorn Remote (artifact and `local/`): a Settings button on the now-playing card and a Settings mode for the program tiles. Each of 21 programs gets sliders (two for a range like "seconds between food") and, where it fits, buttons, for its adjustable constants. *Play with these settings* rewrites those lines in the program on the board and starts it; *Defaults* restores the shipped values. Every slider range was run at both ends in the simulator.
