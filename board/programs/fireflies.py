@@ -22,7 +22,7 @@ PACE = 1.0           # overall speed: dark drifting and how often they light up 
 MAX_SPEED = 9        # top speed for the nearest fireflies at PACE 1, 1/256 px per frame
 DARK = (70, 280)     # frames a firefly stays dark between lights at PACE 1 (min, max)
 LIT_S = (3.0, 6.0)   # seconds a firefly stays lit (min, max)
-LIT_SPEED = 150      # how fast lit fireflies fly, 1/4096 px per frame (150 is about 1 px a second)
+LIT_SPEED = 380      # how fast lit fireflies zip about, 1/4096 px per frame (380 is about 2.3 px a second)
 WAVE_S = (40, 90)    # seconds between flash waves (min, max)
 FRAME = 0.04
 LEVELS = 16
@@ -121,7 +121,7 @@ def frame(su, g, t):
         lit = f[5] >= 0
         if lit:
             top = int(LIT_SPEED * DEPTH_SPEED[f[7]]) or 1
-            nudge = 32
+            nudge = LIT_SPEED // 5 + 1          # lit ones swerve more
         else:
             top = int(MAX_SPEED * 16 * DEPTH_SPEED[f[7]] * PACE) or 1
             nudge = NUDGE
