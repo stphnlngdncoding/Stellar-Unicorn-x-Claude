@@ -17,7 +17,7 @@ PAUSE_S = (1.5, 4.0) # quiet time between spurts
 GRAVITY = 12         # how hard the water falls (bigger = heavier)
 COLOURS = 12         # number of different spurt colours
 BOUNCE = 185         # how bouncy the edges are (out of 256)
-TRAIL = 200          # how long droplet trails linger (out of 256, bigger = longer)
+TRAIL = 110          # how long droplet trails linger (out of 256, bigger = longer)
 FRAME = 0.03
 
 ONE = 256            # fixed point: 1 pixel = 256
