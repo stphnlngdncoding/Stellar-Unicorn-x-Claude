@@ -5,6 +5,16 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.2.2 / v6.1.1: smooth program starts (2026-10-31)
+
+Starting a program from Claude or the Remote used to freeze it twice for about half a second, about 0.8 s and 1.7 s in (measured on the board). Each freeze was the board setting up a secure connection to the cloud: one to send back the result, one to wait for the next command.
+
+- The result now rides along on the next long poll, so it's one connection instead of two. The relay already handled both in one request; no Worker change.
+- A small spinner plays while that connection is made, then the program starts from t = 0, so the stutter happens on the spinner instead of the animation.
+- `board/main.py` is v6.2.2. Boards on v6.1 can upgrade over the air with `board/upgrades/install_v611.py` (6.1 → 6.1.1).
+- Still there: the long poll renews every 50 s, which costs one ~0.5 s pause each time.
+- `spaceship.py`: the ship is two pixels tall, drifts forwards and backwards, and no longer jitters between dodges (it picks a clear lane and holds it).
+
 ## Starfall and spaceship (2026-10-31)
 
 - **`starfall.py`**: twinkling stars over dark hills, shooting stars with fading tails, golden fireballs and meteor showers.

@@ -1,8 +1,9 @@
 # Spaceship: a little ship cruises through space, engine flickering, while
 # stars stream past in three layers. Huge things drift by slowly in the
 # background: a blazing sun, a banded gas giant, a ringed planet, an icy
-# world, a cratered moon. Every so often an asteroid tumbles in and the ship
-# swerves around it (if one ever does clip it, its shield flashes).
+# world, a cratered moon. The ship drifts forwards and backwards, and when an
+# asteroid tumbles in it picks a clear lane and swerves into it (if one ever
+# does clip it, its shield flashes).
 #   A = send an asteroid   B = next planet
 #
 # Memory-friendly: each planet is drawn into a small bytearray mask once when
@@ -19,16 +20,19 @@ ROCK_SPEED = (3.0, 7.0)  # asteroid speed, pixels a second (min, max)
 PLANET_SPEED = 0.3   # how fast planets drift by, pixels a second
 GAP_S = (4, 14)      # seconds of open space between planets (min, max)
 DODGE_SPEED = 7.0    # how fast the ship swerves, pixels a second
+DRIFT = (2, 8)       # how far back and forward the ship wanders (its left edge, px)
+DRIFT_SPEED = 0.8    # how fast it drifts forwards and backwards, pixels a second
+LOOKAHEAD = 12       # how far ahead the ship watches for asteroids (px)
 FRAME = 0.04
 
-SHIP_X = 3
 # star layers: (count, speed in px/s, brightness 0..255)
 LAYERS = ((10, 0.7, 60), (8, 2.0, 120), (5, 5.0, 230))
 KINDS = ("sun", "gas", "ringed", "ice", "moon")
 
 def setup(su, g):
-    global BLACK, STARPEN, ROCK, HULL, WING, COCKPIT, NOSE, FLAME, SHIELD
-    global stars, rocks, ship_y, target_y, cruise_y, next_cruise, shield, a_was, b_was
+    global BLACK, STARPEN, ROCK, HULL, WING, COCKPIT, COCKPIT2, NOSE, FLAME, SHIELD
+    global stars, rocks, ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge
+    global shield, a_was, b_was
     global body, body_x, next_body, order, next_rock, last_t
     BLACK = g.create_pen(0, 0, 0)
     STARPEN = [g.create_pen(b, b, min(255, b + 30)) for _, _, b in LAYERS]
@@ -36,6 +40,7 @@ def setup(su, g):
     HULL = (g.create_pen(150, 155, 170), g.create_pen(230, 235, 245))
     WING = g.create_pen(220, 40, 50)
     COCKPIT = g.create_pen(60, 220, 255)
+    COCKPIT2 = g.create_pen(20, 110, 160)
     NOSE = g.create_pen(255, 255, 255)
     FLAME = (g.create_pen(255, 230, 120), g.create_pen(255, 130, 20), g.create_pen(150, 40, 0))
     SHIELD = g.create_pen(120, 200, 255)
@@ -44,7 +49,11 @@ def setup(su, g):
         for _ in range(n):
             stars.append([random.randrange(16 << 8), random.randrange(16), li])
     rocks = [[0, 0, 0, 0, False] for _ in range(6)]   # x, y, speed, size, alive
-    ship_y = target_y = cruise_y = 8 << 8
+    ship_y = target_y = cruise_y = 7 << 8
+    ship_x = target_x = 3 << 8
+    next_drift = 2.0
+    dodge = None
+    last_threat = 0.0
     next_cruise = 3.0
     shield = 0
     a_was = b_was = False
@@ -150,12 +159,12 @@ def send_rock(aimed):
         return
     size = random.choice((1, 2, 2, 3))
     if aimed:
-        y = (ship_y >> 8) - size // 2 + random.randint(-1, 1)
+        y = (ship_y >> 8) + 1 - size // 2 + random.randint(-1, 1)
     else:
         y = random.randint(0, 15 - size + 1)
     r[0] = 17 << 8
     r[1] = max(0, min(16 - size, y))
-    r[2] = int(random.uniform(*ROCK_SPEED) * SPEED * FRAME * 256)
+    r[2] = int(random.uniform(*ROCK_SPEED) * SPEED * 256 / 25)   # per 1/25 s
     r[3] = size
     r[4] = True
 
@@ -172,13 +181,31 @@ def draw_rock(g, r):
                 g.set_pen(ROCK[2] if i + j == 0 or (s == 3 and i + j == 1 and j == 0) else ROCK[1] if i + j < s else ROCK[0])
                 g.pixel(px, y + j)
 
-# ---------------------------------------------------------------- frame
+# ---------------------------------------------------------------- the ship
+# A two-pixel-tall fighter seen from the side, top-left corner at (sx, sy):
+#   fin  hull  cockpit cockpit
+#   fin  hull  hull    hull    nose
+def blocked(sx):
+    """Rows (as bits) that asteroids ahead of the ship will pass through, plus a margin."""
+    m = 0
+    for r in rocks:
+        if r[4]:
+            rx = r[0] >> 8
+            if rx + r[3] >= sx - 1 and rx <= sx + LOOKAHEAD:
+                for row in range(r[1] - 1, r[1] + r[3] + 1):
+                    if 0 <= row < 16:
+                        m |= 1 << row
+    return m
+
+def free(m, y):
+    return 0 <= y <= 14 and not (m >> y) & 3
+
 def frame(su, g, t):
-    global ship_y, target_y, cruise_y, next_cruise, shield, a_was, b_was
-    global body, body_x, next_body, next_rock, last_t
+    global ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge, last_threat, shield
+    global a_was, b_was, body, body_x, next_body, next_rock, last_t
     dt = t - last_t
-    if dt > 0.2:
-        dt = 0.2
+    if dt > 0.1:
+        dt = 0.1          # after a pause, carry on instead of jumping ahead
     last_t = t
     a = su.is_pressed(StellarUnicorn.SWITCH_A)
     b = su.is_pressed(StellarUnicorn.SWITCH_B)
@@ -206,33 +233,46 @@ def frame(su, g, t):
         next_rock = t + random.uniform(*ASTEROID_S)
     for r in rocks:
         if r[4]:
-            r[0] -= r[2]
+            r[0] -= int(r[2] * dt * 25)
             if r[0] < -(4 << 8):
                 r[4] = False
 
-    # the ship looks ahead and swerves around anything in its lane
+    # drift forwards and backwards
+    if t >= next_drift:
+        target_x = random.randint(DRIFT[0], DRIFT[1]) << 8
+        next_drift = t + random.uniform(3, 9)
+    stepx = int(DRIFT_SPEED * dt * 256) or 1
+    if ship_x < target_x:
+        ship_x = min(target_x, ship_x + stepx)
+    elif ship_x > target_x:
+        ship_x = max(target_x, ship_x - stepx)
+    sx = (ship_x + 128) >> 8
+
+    # dodging: pick the nearest clear lane and stick with it until it's safe
+    m = blocked(sx)
     sy = (ship_y + 128) >> 8
-    danger = None
-    for r in rocks:
-        if r[4]:
-            rx = r[0] >> 8
-            if SHIP_X - 1 <= rx <= SHIP_X + 12 and r[1] - 2 <= sy <= r[1] + r[3] + 1:
-                if danger is None or rx < danger[0]:
-                    danger = (rx, r[1], r[3])
-    if danger:
-        up = danger[1] - 3
-        down = danger[1] + danger[2] + 2
-        ok_up, ok_down = up >= 1, down <= 14
-        if ok_up and (not ok_down or abs(up - sy) <= abs(down - sy)):
-            target_y = up << 8
-        elif ok_down:
-            target_y = down << 8
+    if m:
+        if dodge is None or not free(m, dodge):
+            best = None
+            for d in range(15):
+                for y in (sy - d, sy + d):
+                    if free(m, y) and 1 <= y <= 13:
+                        best = y
+                        break
+                if best is not None:
+                    break
+            dodge = best if best is not None else sy
+        target_y = dodge << 8
+        last_threat = t
+    elif dodge is not None and t - last_threat < 0.8:
+        target_y = dodge << 8              # hold the lane a moment after it's clear
     else:
+        dodge = None
         if t >= next_cruise:
-            cruise_y = random.randint(4, 11) << 8
+            cruise_y = random.randint(3, 11) << 8
             next_cruise = t + random.uniform(3, 8)
-        target_y = cruise_y + int(math.sin(t * 1.3) * 140)
-    step = int(DODGE_SPEED * dt * 256)
+        target_y = cruise_y + int(math.sin(t * 1.3) * 120)
+    step = int(DODGE_SPEED * dt * 256) or 1
     if ship_y < target_y:
         ship_y = min(target_y, ship_y + step)
     elif ship_y > target_y:
@@ -243,7 +283,7 @@ def frame(su, g, t):
     for r in rocks:
         if r[4]:
             rx = r[0] >> 8
-            if rx <= SHIP_X + 4 and rx + r[3] > SHIP_X and r[1] <= sy + 1 and r[1] + r[3] > sy - 1:
+            if rx <= sx + 4 and rx + r[3] > sx and r[1] <= sy + 1 and r[1] + r[3] > sy:
                 shield = 12
                 r[4] = False
 
@@ -266,33 +306,36 @@ def frame(su, g, t):
     # engine flame flickers
     fl = random.getrandbits(2)
     g.set_pen(FLAME[0])
-    g.pixel(SHIP_X - 1, sy)
+    g.pixel(sx - 1, sy + 1)
     if fl:
         g.set_pen(FLAME[1])
-        g.pixel(SHIP_X - 2, sy)
+        g.pixel(sx - 2, sy + 1)
+    if fl & 1:
+        g.set_pen(FLAME[2])
+        g.pixel(sx - 1, sy)
     if fl == 3:
         g.set_pen(FLAME[2])
-        g.pixel(SHIP_X - 3, sy)
-    # the ship: red wings, grey and white hull, a cyan cockpit
+        g.pixel(sx - 3, sy + 1)
     g.set_pen(WING)
-    g.pixel(SHIP_X, sy - 1)
-    g.pixel(SHIP_X + 1, sy - 1)
-    g.pixel(SHIP_X, sy + 1)
-    g.pixel(SHIP_X + 1, sy + 1)
-    g.set_pen(HULL[0])
-    g.pixel(SHIP_X, sy)
+    g.pixel(sx, sy)
+    g.pixel(sx, sy + 1)
     g.set_pen(HULL[1])
-    g.pixel(SHIP_X + 1, sy)
-    g.pixel(SHIP_X + 2, sy)
+    g.pixel(sx + 1, sy)
+    g.pixel(sx + 2, sy + 1)
+    g.pixel(sx + 3, sy + 1)
+    g.set_pen(HULL[0])
+    g.pixel(sx + 1, sy + 1)
     g.set_pen(COCKPIT)
-    g.pixel(SHIP_X + 3, sy)
+    g.pixel(sx + 2, sy)
+    g.set_pen(COCKPIT2)
+    g.pixel(sx + 3, sy)
     g.set_pen(NOSE)
-    g.pixel(SHIP_X + 4, sy)
+    g.pixel(sx + 4, sy + 1)
     if shield:
         shield -= 1
         if shield & 2:
             g.set_pen(SHIELD)
-            for x, y in ((SHIP_X + 5, sy), (SHIP_X + 3, sy - 1), (SHIP_X + 3, sy + 1),
-                         (SHIP_X + 1, sy - 2), (SHIP_X + 1, sy + 2), (SHIP_X - 1, sy - 1), (SHIP_X - 1, sy + 1)):
+            for x, y in ((sx + 5, sy + 1), (sx + 4, sy), (sx + 2, sy - 1), (sx + 2, sy + 2),
+                         (sx, sy - 1), (sx, sy + 2), (sx - 1, sy), (sx - 1, sy + 1)):
                 g.pixel(x, y)
     return FRAME

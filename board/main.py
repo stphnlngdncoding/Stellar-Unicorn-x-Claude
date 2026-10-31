@@ -35,9 +35,9 @@
 #
 # Items change on the clock (every SECONDS), so a restart picks up where it was.
 
-import os, sys, time, gc, json, machine, micropython
+import os, sys, time, gc, json, math, machine, micropython
 
-VERSION = "6.2"
+VERSION = "6.2.2"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
 SELF_RESET = "_self_reset"       # set just before a deliberate self-heal restart
@@ -176,6 +176,7 @@ def launcher():
         "ip": None,
         "asleep": False,
         "hold": False,        # pause frames so the cloud connection can get memory
+        "loading": 0,         # ticks_ms deadline: show the loader until the cloud connection is made
         "wlan": None,
         "last_ok": time.time(),
         "what": None,         # what the user chose: a program or a playlist
@@ -207,6 +208,38 @@ def launcher():
         st["name"] = None
         st["msg"], st["colour"] = "Error :(", (255, 0, 0)
         return text
+
+    # ---------- loading animation ----------
+    # After a program is started from the cloud, the board reports back over a
+    # new secure connection, and setting that up pauses everything for about
+    # half a second. Rather than let the new program stutter, a small spinner
+    # plays until the connection is made, then the program starts from t = 0.
+    RING = [(7 + round(3.4 * math.cos(i * math.pi / 6)), 7 + round(3.4 * math.sin(i * math.pi / 6)))
+            for i in range(12)]
+    LOADPENS = []
+
+    def draw_loader():
+        if not LOADPENS:
+            for k in range(6):
+                v = (6 - k) * 42
+                LOADPENS.append(g.create_pen(v * 7 // 10, v * 8 // 10, v))
+            LOADPENS.append(g.create_pen(0, 0, 0))
+        g.set_pen(LOADPENS[6])
+        g.clear()
+        head = (time.ticks_ms() // 70) % 12
+        for k in range(5, -1, -1):
+            x, y = RING[(head - k) % 12]
+            g.set_pen(LOADPENS[k])
+            g.pixel(x, y)
+            g.pixel(x + 1, y)
+            g.pixel(x, y + 1)
+            g.pixel(x + 1, y + 1)
+        su.update(g)
+
+    def done_loading():
+        if st["loading"]:
+            st["loading"] = 0
+            st["start"] = time.ticks_ms()     # the program starts fresh, without the stutter
 
     def start_program(name, managed=False):
         """Load and start a contract program. Returns None or an error string.
@@ -413,6 +446,13 @@ def launcher():
             if st["asleep"] or st["hold"]:
                 await asyncio.sleep(0.05)
                 continue
+
+            if st["loading"]:
+                if st["env"] is not None and time.ticks_diff(st["loading"], time.ticks_ms()) > 0:
+                    draw_loader()
+                    await asyncio.sleep(0.03)
+                    continue
+                done_loading()
 
             env = st["env"]
             if env is not None:
@@ -723,6 +763,7 @@ def launcher():
             writer.write(head.encode())
             writer.write(body)
             await writer.drain()
+            done_loading()
             code = int((await reader.readline()).split()[1])
             length, chunked = None, False
             while True:
@@ -782,8 +823,8 @@ def launcher():
                 if use_blocking:
                     reply = cloud_post_blocking(cfg, payload)
                 else:
-                    # results go back right away; otherwise wait for work
-                    payload["wait"] = 0 if results else HOLD_SECONDS
+                    # results ride along on the next long poll: one connection, not two
+                    payload["wait"] = HOLD_SECONDS
                     try:
                         reply = await asyncio.wait_for(cloud_post(cfg, payload), HOLD_SECONDS + 20)
                     except (TypeError, NotImplementedError, AttributeError) as e:
@@ -800,11 +841,15 @@ def launcher():
                     start_program(parked, managed=True)
                 parked = None
                 st["cloud"] = "ok (blocking)" if use_blocking else "ok"
+                done_loading()
+                started = st["start"]
                 for cmd in reply.get("commands", []):
                     results.append(execute(cmd))
                     await asyncio.sleep(0)
+                if st["env"] is not None and st["start"] != started and not use_blocking:
+                    st["loading"] = time.ticks_add(time.ticks_ms(), 6000)
                 if results:
-                    delay = 0.1
+                    delay = 0
                 elif reply.get("long_poll") and not use_blocking:
                     delay = 0
                 else:
