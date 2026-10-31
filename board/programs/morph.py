@@ -25,6 +25,7 @@ def hsv(h, s, v):
     return int(r * 255), int(g * 255), int(b * 255)
 
 def setup(su, g):
+    global SHAPES, DIR, PENS, TRI, shape, last_switch, a_was
     SIN = [int(127 * math.sin(2 * math.pi * i / 256)) for i in range(256)]
     rings, spiral, diamond, flower, plaid = (array("h", [0] * 256) for _ in range(5))
     for y in range(16):

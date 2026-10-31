@@ -82,6 +82,15 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 .order{position:absolute;top:6px;right:8px;font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--on-accent);background:var(--accent);border-radius:99px;min-width:20px;height:20px;display:grid;place-items:center;padding:0 5px}
 .tile:disabled{opacity:.4;cursor:default}
 .sel{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tune{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.knobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px 20px}
+.knob{display:flex;flex-direction:column;gap:4px;min-width:0}
+.kl{font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.kl output{font-family:var(--mono);font-size:.8rem;color:var(--ink);white-space:nowrap}
+.knob input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+.pair{display:flex;flex-direction:column}
+.x{border:0;background:none;font-size:1.3rem;line-height:1;color:var(--muted);padding:2px 8px}
+.seg{align-self:flex-start}
 .toggle{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center}
 @media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px}.tile .td{display:none}.now .big{width:64px;height:64px}}
 </style>
@@ -101,12 +110,15 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
       <div class="ctrls">
         <label class="bright" for="bright">Brightness <input type="range" id="bright" min="5" max="100" step="5" value="50"><output id="brightOut">50%</output></label>
         <button type="button" class="btn" id="stopBtn">Stop</button>
+        <button type="button" class="btn" id="tuneBtn">Settings</button>
         <button type="button" class="btn" id="refreshBtn">Refresh</button>
       </div>
     </div>
   </section>
 
   <div class="msg" id="msg" hidden></div>
+
+  <section class="tune" id="tune" hidden aria-labelledby="tuneH"></section>
 
   <section class="rot" aria-labelledby="rotH">
     <div class="rothead"><h2 id="rotH">Rotation</h2><span class="foot" id="rotState">Loading the saved rotation…</span></div>
@@ -125,6 +137,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
       <button type="button" data-mode="play" aria-pressed="true">Play</button>
       <button type="button" data-mode="default" aria-pressed="false">Power-on</button>
       <button type="button" data-mode="rotation" aria-pressed="false">Rotation</button>
+      <button type="button" data-mode="tune" aria-pressed="false">Settings</button>
     </div>
   </div>
 
@@ -168,7 +181,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
   const ROT = "rotation.py";
   const ENGINE = "# ---- the rest runs the playlist ----\nimport gc, time\n\ndef _load(name):\n    global cur, cur_name, cur_t0\n    cur, cur_name = None, None\n    gc.collect()\n    try:\n        with open(name) as f:\n            src = f.read()\n        if \"def frame\" not in src:\n            raise ValueError(\"old-style program\")\n        env = {\"__name__\": name[:-3]}\n        if \"local_time\" in globals():\n            env[\"local_time\"] = local_time\n        exec(src, env)\n        del src\n        G.set_font(\"bitmap8\")\n        G.set_pen(G.create_pen(0, 0, 0))\n        G.clear()\n        if \"setup\" in env:\n            env[\"setup\"](SU, G)\n        cur, cur_name = env, name\n    except Exception as e:\n        print(\"rotation: skipping\", name, repr(e))\n        bad.append(name)\n    cur_t0 = None\n\ndef _pick():\n    items = [n for n in PLAYLIST if n not in bad]\n    if not items:\n        return None\n    return items[int(time.time() // max(10, SECONDS)) % len(items)]\n\ndef setup(su, g):\n    global SU, G, bad, cur, cur_name, cur_t0\n    SU, G = su, g\n    bad, cur, cur_name, cur_t0 = [], None, None, None\n\ndef frame(su, g, t):\n    global cur_t0, cur\n    want = _pick()\n    if want is None:\n        g.set_pen(g.create_pen(0, 0, 0))\n        g.clear()\n        return 0.5\n    if want != cur_name:\n        _load(want)\n        if cur is None:\n            return 0.05\n    if cur_t0 is None:\n        cur_t0 = t\n    try:\n        return cur[\"frame\"](su, g, t - cur_t0)\n    except Exception as e:\n        print(\"rotation: error in\", cur_name, repr(e))\n        bad.append(cur_name)\n        cur = None\n        return 0.05\n";
   let mode = "play", rot = { list: [], secs: 600, loaded: false };
-  const HINTS = { play: "Tap a program to play it.", default: "Tap the program that should play when the board powers on.", rotation: "Tap programs to add them to the rotation, in order. Tap again to take one out." };
+  const HINTS = { play: "Tap a program to play it.", default: "Tap the program that should play when the board powers on.", rotation: "Tap programs to add them to the rotation, in order. Tap again to take one out.", tune: "Tap a program to change its settings." };
   const LEGACY = new Set(["fire.py", "supercomputer.py", "today.py"]);
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -185,6 +198,62 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
   function led(cols, n) {
     let s = ""; for (let i = 0; i < n * n; i++) { const x = i % n, y = (i / n) | 0, k = (x * 3 + y * 5 + ((x * y) % 3)) % 6; s += k < 4 ? `<i style="background:${cols[k]}"></i>` : "<i></i>"; }
     return s;
+  }
+
+
+  // Settings: each program's adjustable constants, with safe slider ranges
+  // (tested at both ends). d = the value it ships with.
+  const TUNE = {"antfarm.py":[{"k":"TICK","l":"Seconds per ant step","min":0.05,"max":0.8,"step":0.05,"d":0.3},{"k":"START_ANTS","l":"Ants at the start","min":1,"max":10,"step":1,"d":4},{"k":"MAX_ANTS","l":"Most ants","min":2,"max":20,"step":1,"d":12},{"k":"DIG_CHANCE","l":"Digging eagerness","min":0.02,"max":0.6,"step":0.02,"d":0.22},{"k":"FOOD_S","l":"Seconds between food","min":2,"max":60,"step":1,"d":[8,20]},{"k":"HATCH_S","l":"Seconds to hatch","min":5,"max":90,"step":5,"d":25},{"k":"FULL","l":"Dug cells before a fresh farm","min":30,"max":150,"step":5,"d":90}],"drift.py":[{"k":"MOTES","l":"Motes","min":4,"max":30,"step":1,"d":14},{"k":"STEP","l":"Speed","min":5,"max":80,"step":1,"d":26},{"k":"DEPOSIT","l":"Glow","min":10,"max":120,"step":2,"d":46},{"k":"FADE","l":"Trail length","min":40,"max":63,"step":1,"d":60},{"k":"PALETTE_SECONDS","l":"Seconds per palette","min":15,"max":300,"step":15,"d":90}],"fireflies.py":[{"k":"COUNT","l":"Fireflies","min":4,"max":30,"step":1,"d":16},{"k":"MAX_SPEED","l":"Speed","min":2,"max":30,"step":1,"d":9},{"k":"DARK","l":"Frames dark between bursts","min":10,"max":600,"step":10,"d":[70,280]},{"k":"BLINKS","l":"Blinks per burst","min":1,"max":6,"step":1,"d":[2,4]},{"k":"WAVE_S","l":"Seconds between waves","min":10,"max":200,"step":5,"d":[40,90]}],"fractal.py":[{"k":"MORPH_SPEED","l":"Morph speed","min":0.005,"max":0.2,"step":0.005,"d":0.045},{"k":"SPIN_SPEED","l":"Spin speed","min":0,"max":0.15,"step":0.005,"d":0.03},{"k":"ZOOM","l":"Zoom out","min":0.5,"max":2.5,"step":0.1,"d":1.2},{"k":"CONTRAST","l":"Contrast","min":0.5,"max":3,"step":0.1,"d":1.6},{"k":"MAX_ITER","l":"Detail","min":8,"max":48,"step":1,"d":24}],"garden.py":[{"k":"MAX_PLANTS","l":"Most plants","min":2,"max":16,"step":1,"d":10},{"k":"GROW","l":"Seconds to grow","min":4,"max":60,"step":1,"d":[14,30]},{"k":"BLOOM","l":"Seconds in bloom","min":10,"max":200,"step":5,"d":[40,90]},{"k":"WILT","l":"Seconds to wilt","min":1,"max":20,"step":1,"d":6},{"k":"SEED_EVERY","l":"Seconds between seeds","min":2,"max":60,"step":1,"d":[8,20]}],"goo.py":[{"k":"BLOBS","l":"Blobs","min":2,"max":9,"step":1,"d":5},{"k":"DRIFT","l":"Drift speed","min":0.005,"max":0.15,"step":0.005,"d":0.045},{"k":"SWELL","l":"Swell speed","min":0.01,"max":0.3,"step":0.01,"d":0.11},{"k":"COLOUR_MINUTES","l":"Minutes per colour cycle","min":1,"max":20,"step":1,"d":4},{"k":"EDGE","l":"Black space","min":120,"max":500,"step":10,"d":260}],"lava_lamp.py":[{"k":"BLOB_COUNT","l":"Blobs","min":1,"max":10,"step":1,"d":5},{"k":"HUE_STEP","l":"Colour cycle speed","min":0,"max":0.01,"step":0.0005,"d":0.001}],"life.py":[{"k":"COLOR_STYLE","l":"Colours","opts":["Families","Rainbow","Age"],"d":0},{"k":"STEP_SECONDS","l":"Seconds per generation","min":0.05,"max":1.5,"step":0.05,"d":0.3},{"k":"FADE","l":"Fade speed","min":10,"max":255,"step":5,"d":51},{"k":"DENSITY","l":"Starting density","min":0.05,"max":0.7,"step":0.05,"d":0.3},{"k":"TRIBES","l":"Colour families","min":1,"max":10,"step":1,"d":4},{"k":"MUTATION","l":"Colour mutation","min":0,"max":40,"step":1,"d":8},{"k":"HUE_STEP","l":"Palette drift","min":0,"max":20,"step":1,"d":3},{"k":"RIPEN","l":"Generations to ripen","min":1,"max":30,"step":1,"d":8},{"k":"MAX_SATURATION","l":"Saturation","min":0.2,"max":1,"step":0.05,"d":0.85}],"life2.py":[{"k":"STEP_SECONDS","l":"Seconds per generation","min":0.1,"max":2,"step":0.05,"d":0.6},{"k":"CALM_SECONDS","l":"Seconds before the dot","min":2,"max":60,"step":1,"d":10},{"k":"HUE_SPEED","l":"Colour stream speed","min":0,"max":20,"step":1,"d":5},{"k":"AGE_SHIFT","l":"Colour change with age","min":0,"max":64,"step":1,"d":23},{"k":"SHIPS","l":"Spaceships per fleet","min":1,"max":8,"step":1,"d":[3,5]}],"mercury.py":[{"k":"SPEED","l":"Overall speed","min":1,"max":4,"step":1,"d":2},{"k":"LEVEL","l":"Depth","min":1,"max":8,"step":0.5,"d":3.5},{"k":"SLOSH","l":"Rocking speed","min":0.02,"max":0.5,"step":0.02,"d":0.14},{"k":"TILT","l":"Rocking height","min":0,"max":10,"step":0.5,"d":5.5},{"k":"WAIT","l":"Seconds between scoops","min":2,"max":40,"step":1,"d":[6,15]},{"k":"GRAVITY","l":"Gravity","min":10,"max":150,"step":5,"d":60},{"k":"MAX_DROPS","l":"Most droplets","min":0,"max":80,"step":1,"d":45},{"k":"BOUNCE","l":"Bounciness","min":0,"max":0.95,"step":0.05,"d":0.7},{"k":"COLOUR_S","l":"Seconds per colour cycle","min":5,"max":120,"step":5,"d":30},{"k":"TONES","l":"Tone spread","min":0,"max":0.5,"step":0.05,"d":0.3}],"morph.py":[{"k":"HOLD","l":"Seconds per shape","min":1,"max":20,"step":0.5,"d":6},{"k":"MELT","l":"Seconds to melt","min":1,"max":15,"step":0.5,"d":4},{"k":"FLOW","l":"Flow speed","min":5,"max":120,"step":5,"d":40},{"k":"HUE_DRIFT","l":"Rainbow drift","min":0,"max":20,"step":1,"d":5}],"plasma.py":[{"k":"SPEED","l":"Speed","min":0.05,"max":2,"step":0.05,"d":0.3}],"rainbow.py":[{"k":"SPEED","l":"Speed","min":0.05,"max":1,"step":0.05,"d":0.2}],"sand.py":[{"k":"POUR_S","l":"Seconds per pour","min":1,"max":20,"step":1,"d":[4,9]},{"k":"PAUSE_S","l":"Seconds between pours","min":0,"max":10,"step":0.5,"d":[1,3]},{"k":"RATE","l":"Pour rate","min":10,"max":255,"step":5,"d":[70,200]},{"k":"FULL","l":"Grains before draining","min":60,"max":230,"step":10,"d":170}],"snake.py":[{"k":"SPEED","l":"Moves per second","min":2,"max":25,"step":1,"d":9},{"k":"START","l":"Starting length","min":2,"max":10,"step":1,"d":3},{"k":"HAND_S","l":"Seconds before autopilot takes over","min":1,"max":15,"step":1,"d":4}],"tetris.py":[{"k":"TICK","l":"Seconds per move","min":0.02,"max":0.4,"step":0.01,"d":0.07},{"k":"FAST_TICK","l":"Seconds per move (fast)","min":0.01,"max":0.1,"step":0.01,"d":0.03}],"tides.py":[{"k":"SPEED","l":"Wave speed","min":1,"max":10,"step":1,"d":3},{"k":"COLOUR_SPEED","l":"Colour speed","min":0,"max":10,"step":1,"d":2}],"tunnel.py":[{"k":"SPEED","l":"Driving speed","min":5,"max":100,"step":5,"d":34},{"k":"SPIN","l":"Spin","min":0,"max":30,"step":1,"d":9},{"k":"CURVE","l":"Curves","min":0,"max":8,"step":1,"d":5}],"warp.py":[{"k":"STARS","l":"Stars","min":5,"max":60,"step":1,"d":28},{"k":"ACCEL","l":"Acceleration","min":1.02,"max":1.3,"step":0.01,"d":1.13}],"waterjet.py":[{"k":"MAX_DROPS","l":"Most droplets","min":10,"max":150,"step":5,"d":90},{"k":"SPURT_S","l":"Seconds per spurt","min":0.5,"max":15,"step":0.5,"d":[3.5,6.5]},{"k":"PAUSE_S","l":"Seconds between spurts","min":0.5,"max":30,"step":0.5,"d":[5,10]},{"k":"GRAVITY","l":"Gravity","min":1,"max":20,"step":1,"d":7},{"k":"BOUNCE","l":"Bounciness","min":0,"max":250,"step":5,"d":185},{"k":"TRAIL","l":"Trail length","min":0,"max":250,"step":5,"d":110}]};
+  let tune = null;
+  const decs = s => { const t = String(s); return t.includes(".") ? t.split(".")[1].length : 0; };
+  const snapV = (v, c) => +(Math.round(v / c.step) * c.step).toFixed(decs(c.step));
+  const fmtV = (v, c) => { const d = c.step ? decs(c.step) : 0; return d ? (+v).toFixed(d) : String(v); };
+  const constRe = k => new RegExp("^(" + k + "\\s*=\\s*)(\\([^)\\n]*\\)|-?[0-9.]+)", "m");
+  function readConst(src, k) {
+    const m = src.match(constRe(k)); if (!m) return null;
+    const raw = m[2];
+    return { v: raw[0] === "(" ? raw.slice(1, -1).split(",").map(s => +s.trim()) : +raw, isInt: !raw.includes(".") };
+  }
+  function pyNum(v, c, isInt) {
+    if (isInt && Number.isInteger(c.step || 1)) return String(Math.round(v));
+    const s = String(+(+v).toFixed(Math.max(decs(c.step || 1), 1)));
+    return /[.e]/.test(s) ? s : s + ".0";
+  }
+  function writeConst(src, c, v, isInt) {
+    const raw = Array.isArray(v) ? "(" + v.map(x => pyNum(x, c, isInt)).join(", ") + ")" : pyNum(v, c, isInt);
+    return src.replace(constRe(c.k), (m, a) => a + raw);
+  }
+  async function openTune(n) {
+    if (!TUNE[n]) { note(info(n)[0] + " has no settings to change."); return; }
+    tune = { name: n, src: null, vals: {}, ints: {}, loading: true };
+    renderTune(); $("tune").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    try {
+      const src = textOf(await call("get_program_source", { name: n }));
+      if (!/def frame/.test(src)) throw { code: "tool_error", message: src || "couldn't read " + n };
+      if (!tune || tune.name !== n) return;
+      tune.src = src;
+      for (const c of TUNE[n]) { const r = readConst(src, c.k); if (r) { tune.vals[c.k] = r.v; tune.ints[c.k] = r.isInt; } }
+    } catch (e) { tune = null; renderTune(); failNote(e, () => openTune(n)); return; }
+    tune.loading = false; renderTune();
+  }
+  function knob(c) {
+    const v = tune.vals[c.k], id = "k_" + c.k;
+    if (c.opts) return `<div class="knob"><span class="kl">${esc(c.l)}</span><div class="modes seg" role="group" aria-label="${esc(c.l)}">${c.opts.map((o, i) => `<button type="button" data-k="${c.k}" data-opt="${i}" aria-pressed="${v === i}">${esc(o)}</button>`).join("")}</div></div>`;
+    if (Array.isArray(v)) return `<div class="knob"><label class="kl" for="${id}_0">${esc(c.l)} <output>${fmtV(Math.min(...v), c)}–${fmtV(Math.max(...v), c)}</output></label><div class="pair"><input type="range" id="${id}_0" data-k="${c.k}" data-i="0" min="${c.min}" max="${c.max}" step="${c.step}" value="${v[0]}" aria-label="${esc(c.l)}, low end"><input type="range" data-k="${c.k}" data-i="1" min="${c.min}" max="${c.max}" step="${c.step}" value="${v[1]}" aria-label="${esc(c.l)}, high end"></div></div>`;
+    return `<div class="knob"><label class="kl" for="${id}">${esc(c.l)} <output>${fmtV(v, c)}</output></label><input type="range" id="${id}" data-k="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${v}"></div>`;
+  }
+  function renderTune() {
+    const el = $("tune");
+    if (!tune) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    let h = `<div class="rothead"><h2 id="tuneH">Settings · ${esc(info(tune.name)[0])}</h2><button type="button" class="x" id="tuneClose" aria-label="Close settings">×</button></div>`;
+    if (tune.loading) h += '<p class="foot">Reading the program from the board…</p>';
+    else {
+      const cs = TUNE[tune.name].filter(c => c.k in tune.vals);
+      h += cs.length ? '<div class="knobs">' + cs.map(knob).join("") + "</div>" : '<p class="foot">This copy of the program has none of the usual settings.</p>';
+      h += '<div class="rotrow"><button type="button" class="btn pri" data-apply="1">Play with these settings</button><button type="button" class="btn" data-apply="0">Save without playing</button><button type="button" class="btn" id="tuneReset">Defaults</button></div>';
+    }
+    el.innerHTML = h;
   }
 
   const everyText = s => s < 3600 ? (s / 60) + " min" : (s / 3600) + " h";
@@ -227,7 +296,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     const groups = {};
     S.programs.filter(n => !HIDE(n)).forEach(n => { const g = info(n)[3]; (groups[g] = groups[g] || []).push(n); });
     $("library").innerHTML = ORDER.filter(g => groups[g]).map(g => `<section class="group"><h2>${esc(g)}</h2><div class="grid">${groups[g].map(n => {
-      const I = info(n), on = n === R, star = n === D, ri = rot.list.indexOf(n), off = mode === "rotation" && LEGACY.has(n);
+      const I = info(n), on = n === R, star = n === D, ri = rot.list.indexOf(n), off = (mode === "rotation" && LEGACY.has(n)) || (mode === "tune" && !TUNE[n]);
       return `<button type="button" class="tile" data-n="${esc(n)}" aria-pressed="${on}"${off ? " disabled" : ""}>${mode === "rotation" && ri >= 0 ? `<span class="order">${ri + 1}</span>` : ""}<div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
     }).join("")}</div></section>`).join("");
   }
@@ -276,6 +345,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     const b = e.target.closest(".tile"); if (!b) return;
     const n = b.dataset.n;
     if (mode === "default") { act("set_default_program", { name: n }, () => { S.def = n; setMode("play"); }); return; }
+    if (mode === "tune") { openTune(n); return; }
     if (mode === "rotation") { const i = rot.list.indexOf(n); if (i >= 0) rot.list.splice(i, 1); else rot.list.push(n); render(); return; }
     if (LEGACY.has(n)) note(info(n)[0] + " restarts the board. Press the sleep button on the board to come back.");
     S.running = n; render();
@@ -322,6 +392,28 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     const mk = $("rotDefault").checked;
     act("upload_program", { name: ROT, code: rotCode(), run: true, make_default: mk }, t => { S.running = ROT; if (mk) S.def = ROT; setMode("play"); note("Rotation started: " + rotSummary() + "."); });
   };
+
+  $("tune").addEventListener("input", e => {
+    const r = e.target.closest("input[type=range]"); if (!r || !tune) return;
+    const c = TUNE[tune.name].find(x => x.k === r.dataset.k), v = snapV(+r.value, c);
+    if (r.dataset.i != null) { const p = tune.vals[c.k].slice(); p[+r.dataset.i] = v; tune.vals[c.k] = p; } else tune.vals[c.k] = v;
+    const cur = tune.vals[c.k];
+    r.closest(".knob").querySelector("output").textContent = Array.isArray(cur) ? fmtV(Math.min(...cur), c) + "–" + fmtV(Math.max(...cur), c) : fmtV(cur, c);
+  });
+  $("tune").addEventListener("click", e => {
+    if (!tune) return;
+    if (e.target.closest("#tuneClose")) { tune = null; renderTune(); return; }
+    const o = e.target.closest("[data-opt]");
+    if (o) { tune.vals[o.dataset.k] = +o.dataset.opt; renderTune(); return; }
+    if (e.target.closest("#tuneReset")) { for (const c of TUNE[tune.name]) if (c.k in tune.vals) tune.vals[c.k] = Array.isArray(c.d) ? c.d.slice() : c.d; renderTune(); return; }
+    const a = e.target.closest("[data-apply]");
+    if (!a || tune.loading) return;
+    let src = tune.src;
+    for (const c of TUNE[tune.name]) if (c.k in tune.vals) { let v = tune.vals[c.k]; if (Array.isArray(v)) v = [Math.min(...v), Math.max(...v)]; src = writeConst(src, c, v, tune.ints[c.k]); }
+    const run = a.dataset.apply === "1", n = tune.name;
+    act("upload_program", { name: n, code: src, run, make_default: false }, () => { if (tune && tune.name === n) tune.src = src; if (run) S.running = n; note((run ? "Playing " : "Saved ") + info(n)[0] + " with your settings."); });
+  });
+  $("tuneBtn").onclick = () => { if (S.running && TUNE[S.running]) openTune(S.running); else note("Switch to Settings below and tap a program to change it."); };
   $("hint").textContent = HINTS.play;
 
   render();

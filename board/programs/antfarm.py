@@ -15,7 +15,7 @@ from stellar import StellarUnicorn
 
 START_ANTS = 4
 MAX_ANTS = 12
-TICK = 0.2           # seconds per ant step (smaller = busier ants)
+TICK = 0.3           # seconds per ant step (smaller = busier ants)
 DIG_CHANCE = 0.22    # chance an ant underground digs on a step (if it can)
 FOOD_S = (8, 20)     # seconds between food drops (min, max)
 HATCH_S = 25         # seconds for an egg to hatch

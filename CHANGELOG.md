@@ -5,6 +5,12 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Program settings in the Remote (2026-10-31)
+
+- **Settings** in the Unicorn Remote (artifact and `local/`): a Settings button on the now-playing card and a Settings mode for the program tiles. Each of 21 programs gets sliders (two for a range like "seconds between food") and, where it fits, buttons, for its adjustable constants. *Play with these settings* rewrites those lines in the program on the board and starts it; *Defaults* restores the shipped values. Every slider range was run at both ends in the simulator.
+- `antfarm.py`: slower ants (0.3 s per step).
+- `morph.py` in the repo was missing its `global` line in `setup()` (the board's copy had it).
+
 ## Fireflies and ant farm (2026-10-31)
 
 - **`fireflies.py`**: fireflies with their own colours and three depths drift over a night meadow and blink in bursts of two to four, with an occasional flash wave across the board.
