@@ -7,13 +7,18 @@
 # twinkle above the grass.
 #   A = set off a flash wave now
 #
-# Memory-friendly: positions are integers (1/256 of a pixel), the trail is a
+# PACE slows everything but the blinks themselves: at the very bottom the
+# fireflies barely creep and each one lights up only every few minutes, so
+# catching one is a little surprise.
+#
+# Memory-friendly: positions are integers (1/4096 of a pixel), the trail is a
 # bytearray, and every pen is made once in setup().
 import random
 from stellar import StellarUnicorn
 
 COUNT = 16           # how many fireflies
-MAX_SPEED = 9        # top speed for the nearest fireflies, 1/256 px per frame
+PACE = 1.0           # overall speed: drifting and how often they blink (0.01 = almost never)
+MAX_SPEED = 9        # top speed for the nearest fireflies at PACE 1, 1/256 px per frame
 DARK = (70, 280)     # frames a firefly stays dark between bursts (min, max)
 BLINKS = (2, 4)      # blinks per burst (min, max)
 WAVE_S = (40, 90)    # seconds between flash waves (min, max)
@@ -31,7 +36,8 @@ DEPTH_SPEED = (0.45, 0.7, 1.0)
 DEPTH_HALO = (16, 11, 6)     # halo shows above this brightness (16 = never)
 
 def setup(su, g):
-    global BG, STAR, flies, trail, trail_fly, next_wave, a_was, frames
+    global BG, STAR, NUDGE, flies, trail, trail_fly, next_wave, a_was, frames
+    NUDGE = max(1, int(32 * PACE))
     # the night: a deep blue sky that darkens towards the ground, and grass
     grass = [random.choice((1, 1, 2, 2, 2, 3)) for _ in range(16)]
     for x in range(1, 15, 4):
@@ -58,20 +64,24 @@ def setup(su, g):
         m = DEPTH_BRIGHT[d]
         glow = [g.create_pen(int(r * m * v / 15), int(gg * m * v / 15), int(b * m * v / 15)) for v in range(LEVELS)]
         halo = [g.create_pen(int(r * m * v / 60), int(gg * m * v / 45), int(b * m * v / 60)) for v in range(LEVELS)]
-        flies.append([random.randrange(16 << 8), random.randrange(1 << 8, 12 << 8),
-                      0, 0, random.randint(0, DARK[1]), -1, 2, d, glow, halo])
+        flies.append([random.randrange(16 << 12), random.randrange(1 << 12, 12 << 12),
+                      0, 0, dark_frames(), -1, 2, d, glow, halo])
     flies.sort(key=lambda f: f[7])                   # far ones drawn first
+    random.choice(flies)[4] = random.randint(25, 75) # one says hello early on
     trail = bytearray(256)
     trail_fly = bytearray(256)                       # which firefly left it
-    next_wave = random.uniform(*WAVE_S)
+    next_wave = random.uniform(*WAVE_S) / PACE
     a_was = False
     frames = 0
+
+def dark_frames():
+    return int(random.randint(DARK[0], DARK[1]) / PACE)
 
 def wave():
     # flash in a sweep from one side to the other
     left = random.getrandbits(1)
     for f in flies:
-        px = f[0] >> 8
+        px = f[0] >> 12
         f[4] = (px if left else 15 - px) * 4 + random.randrange(4)
         f[5] = -1
 
@@ -81,7 +91,7 @@ def frame(su, g, t):
     a = su.is_pressed(StellarUnicorn.SWITCH_A)
     if (a and not a_was) or t >= next_wave:
         wave()
-        next_wave = t + random.uniform(*WAVE_S)
+        next_wave = t + random.uniform(*WAVE_S) / PACE
     a_was = a
 
     # ---- background and stars ----
@@ -108,13 +118,13 @@ def frame(su, g, t):
     # ---- fireflies ----
     for n in range(COUNT):
         f = flies[n]
-        top = int(MAX_SPEED * DEPTH_SPEED[f[7]])
+        top = int(MAX_SPEED * 16 * DEPTH_SPEED[f[7]] * PACE) or 1
         # wander: nudge the velocity now and then, keep it gentle
         vx = f[2]
         vy = f[3]
         if fade:
-            vx += random.randint(-2, 2)
-            vy += random.randint(-2, 2)
+            vx += random.randint(-NUDGE, NUDGE)
+            vy += random.randint(-NUDGE, NUDGE)
         if vx > top:
             vx = top
         elif vx < -top:
@@ -125,10 +135,10 @@ def frame(su, g, t):
             vy = -top
         x = f[0] + vx
         y = f[1] + vy
-        if x < 0 or x > (15 << 8):
+        if x < 0 or x > (15 << 12):
             vx = -vx
             x = f[0]
-        if y < (1 << 8) or y > (13 << 8):
+        if y < (1 << 12) or y > (13 << 12):
             vy = -vy
             y = f[1]
         f[0] = x
@@ -147,11 +157,11 @@ def frame(su, g, t):
         f[5] += 1
         if f[5] >= f[6] * PERIOD - GAP:
             f[5] = -1
-            f[4] = random.randint(DARK[0], DARK[1])
+            f[4] = dark_frames()
         if not v:
             continue
-        px = (x + 128) >> 8
-        py = (y + 128) >> 8
+        px = (x + 2048) >> 12
+        py = (y + 2048) >> 12
         if px > 15:
             px = 15
         if py > 15:
