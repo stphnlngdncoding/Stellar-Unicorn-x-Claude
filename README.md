@@ -38,7 +38,7 @@ The board can't be reached from the internet, so it keeps a connection open to a
 
 4. **Try it.** "What's on my Unicorn right now?" or "Put a slow rainbow on the board."
 
-After setup the board only needs USB power. Prefer to do it by hand? See [manual setup](GUIDE.md#manual-setup).
+After setup the board only needs USB power. Prefer to do it by hand? See [manual setup](GUIDE.md#manual-setup). Launcher updates can be installed over the air; see [`board/upgrades/`](board/upgrades/README.md).
 
 ### No Cloudflare? Run it locally
 
@@ -46,7 +46,7 @@ After setup the board only needs USB power. Prefer to do it by hand? See [manual
 
 ## Example programs
 
-`board/programs/` has ready-made programs: Game of Life, plasma, lava lamp, silk tides, neon tunnel, driftfield, fractal, warp and more. Programs use a simple `setup()` / `frame()` contract; see [writing programs](GUIDE.md#writing-programs).
+`board/programs/` has ready-made programs: Game of Life (and Life v2: shattering still lifes and spaceship fleets), plasma, lava lamp, silk tides, neon tunnel, driftfield, fractal, warp, liquid metal, water jet, sand, garden, goo, morph, fireflies, ant farm, starfall, a spaceship dodging asteroids past planets, and self-playing Tetris and Snake. Programs use a simple `setup()` / `frame()` contract; see [writing programs](GUIDE.md#writing-programs).
 
 ## More
 

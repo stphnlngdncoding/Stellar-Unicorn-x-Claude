@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Spaceship polish (2026-10-31)
+
+- `spaceship.py`: the backdrop (stars, suns, planets) is muted and greyer, and dimmed a little more in a thin halo right round the ship, so the ship stands out. Planets come in many colour schemes and sizes, often with one or two moons, and a sun follows each round of six planets. The ship is brighter. New Settings: background brightness, colour drain and halo dimming.
+
 ## v6.2.2 / v6.1.1: smooth program starts (2026-10-31)
 
 Starting a program from Claude or the Remote used to freeze it twice for about half a second, about 0.8 s and 1.7 s in (measured on the board). Each freeze was the board setting up a secure connection to the cloud: one to send back the result, one to wait for the next command.

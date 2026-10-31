@@ -40,7 +40,8 @@ board/
   _wd.py             # watchdog helper used by boot.py and main.py
   secrets.example.py # copy to secrets.py and add your Wi-Fi details
   cloud.example.json # copy to _cloud.json and add your Worker URL + board token
-  programs/          # example programs (life, lava lamp, fractal, warp, ...)
+  programs/          # example programs (life, lava lamp, fractal, warp, spaceship, ...)
+  upgrades/          # over-the-air launcher upgrades (install_v*.py)
 remote/
   unicorn-remote.html # the Unicorn Remote artifact app (see below)
 local/               # no-Cloudflare alternative, Python only (see local/README.md)
