@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Mirror Life fades and palettes, and Slow Life (2026-11-01)
+
+- `mirrorlife.py`: new cells glow in and dead ones fade away (timed in seconds, so it stays smooth at any speed), and colours come from seven hand-made three-colour palettes (ember, lagoon, neon, citrus, aurora, candy, ice), a different one each round unless you pick one. New Settings for palette, fade in/out and newborn flash.
+- **`slowlife.py`**: Mirror Life at a crawl: a generation every 4 seconds, 2.5 s to glow in, 6 s to fade out. In the Remote under Calm.
+
 ## Kaleidoscope and Mirror Life (2026-11-01)
 
 - **`kaleidoscope.py`**: pieces of coloured glass tumble in a slowly turning tube, folded by eight mirrors (or four) into a symmetric picture, stained-glass style with dark seams and pieces that glow towards their middles. Every so often the tube is shaken into a new picture. A = shake, B = eight or four mirrors.
