@@ -5,8 +5,11 @@
 # Everything behind the ship is muted, and dimmed further in a thin halo
 # right around it, so it stands out. The ship drifts forwards and backwards,
 # and when an asteroid tumbles in it picks a clear lane and swerves into it
-# (if one ever does clip it, its shield flashes).
-#   A = send an asteroid   B = next planet
+# (if one ever does clip it, its shield flashes). Every so often a flying
+# saucer glides in, hovers with its rim lights chasing round, sometimes
+# shines a tractor beam down, then zips off up and away; the ship gives it
+# a wide berth.
+#   A = send an asteroid   B = next planet   C = call the flying saucer
 #
 # Memory-friendly: each planet is drawn into a small bytearray mask once when
 # it appears; asteroids come from a fixed pool; positions are integers
@@ -28,6 +31,10 @@ LOOKAHEAD = 12       # how far ahead the ship watches for asteroids (px)
 BACKDROP = 0.3       # brightness of everything behind the ship: stars, suns, planets (0..1)
 MUTE = 0.55          # how much colour is drained from the backdrop (0 = full colour, 1 = grey)
 OUTLINE = 0.6        # how much the backdrop is dimmed right around the ship (0 = not at all, 1 = black)
+UFO_S = (25, 70)     # seconds between flying saucer visits (min, max)
+UFO_SPEED = 5.0      # how fast the saucer glides in, pixels a second
+UFO_HOVER = (2.0, 5.0)  # seconds it hovers before zipping off (min, max)
+BEAM = 0.6           # chance it shines its tractor beam while hovering
 FRAME = 0.04
 
 # star layers: (count, speed in px/s, brightness 0..255)
@@ -39,6 +46,7 @@ def setup(su, g):
     global stars, rocks, ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge
     global last_threat, shield, a_was, b_was
     global body, body_x, next_body, order, next_rock, last_t
+    global DOME, SAUCER, LIGHTS, BEAMPEN, ufo, next_ufo, c_was
     BLACK = g.create_pen(0, 0, 0)
     STARPEN = [g.create_pen(*muted((b, b, min(255, b + 30)))) for _, _, b in LAYERS]
     ROCK = (g.create_pen(60, 48, 40), g.create_pen(110, 92, 75), g.create_pen(170, 150, 125))
@@ -51,6 +59,13 @@ def setup(su, g):
     NOSE = g.create_pen(255, 255, 255)
     FLAME = (g.create_pen(255, 230, 120), g.create_pen(255, 130, 20), g.create_pen(150, 40, 0))
     SHIELD = g.create_pen(120, 200, 255)
+    DOME = (g.create_pen(110, 255, 210), g.create_pen(220, 255, 245))         # glass, glint
+    SAUCER = (g.create_pen(235, 238, 248), g.create_pen(165, 170, 190), g.create_pen(85, 88, 105))  # top, rim, belly
+    LIGHTS = (g.create_pen(255, 50, 60), g.create_pen(255, 215, 40), g.create_pen(60, 255, 120), g.create_pen(70, 150, 255))
+    BEAMPEN = (g.create_pen(90, 200, 120), g.create_pen(50, 125, 75), g.create_pen(25, 65, 40))
+    ufo = None
+    next_ufo = random.uniform(8, 20)      # the first visit comes fairly soon
+    c_was = False
     stars = []
     for li, (n, sp, b) in enumerate(LAYERS):
         for _ in range(n):
@@ -265,9 +280,106 @@ def halo(g, x, y):
             g.pixel(x, y)
             return
 
+# ---------------------------------------------------------------- flying saucer
+# Seven wide, four tall, top-left corner at (ux, uy):
+#   . . d d d . .     glass dome
+#   . t t t t t .     silver top
+#   r r r r r r r     rim, with lights chasing round
+#   . . b b b . .     belly
+# ufo = [x, y, phase, phase start, direction, hover x, base y, speed, rise, hover time, beam on, beam off]
+def call_ufo(t):
+    global ufo
+    d = random.choice((1, -1))
+    beams = random.random() < BEAM
+    # a saucer that will beam flies along the very top, so the ship has room below
+    base = random.choice((0.4, 0.8)) if beams else random.choice((1.0, 2.0, 9.5, 10.5, 11.0))
+    ufo = [-8.0 if d > 0 else 17.0, base, "in", t, d, float(random.randint(3, 6)), base,
+           UFO_SPEED, random.choice((-1, 1)) * random.uniform(2, 5), random.uniform(*UFO_HOVER),
+           -1.0 if beams else 0.0, 0.0]
+
+def move_ufo(t, dt):
+    global ufo, next_ufo
+    u = ufo
+    ph = u[2]
+    if ph == "in":
+        u[0] += u[4] * UFO_SPEED * SPEED * dt
+        if (u[4] > 0 and u[0] >= u[5]) or (u[4] < 0 and u[0] <= u[5]):
+            u[2] = "hover"
+            u[3] = t
+            if u[10] < 0:
+                u[10] = t + 0.6
+                u[11] = t + u[9] - 0.4
+    elif ph == "hover":
+        u[0] = u[5] + math.sin((t - u[3]) * 1.7) * 0.6
+        if t - u[3] >= u[9]:
+            u[2] = "out"
+            u[3] = t
+    else:                                      # zip off, faster and faster, up or down and away
+        u[7] *= 1 + 3.5 * dt
+        u[0] += u[4] * u[7] * dt
+        u[6] += u[8] * (u[7] / UFO_SPEED) * dt * 0.4
+        if u[0] < -9 or u[0] > 18 or u[6] < -6 or u[6] > 19:
+            ufo = None
+            next_ufo = t + random.uniform(*UFO_S)
+            return
+    u[1] = u[6] + math.sin(t * 2.3) * 0.7      # a lazy wobble
+
+def ufo_rows(sx):
+    """Rows the saucer (and its beam) take up ahead of the ship, as bits."""
+    u = ufo
+    x = int(u[0] + 0.5)
+    if x + 7 < sx - 1 or x > sx + LOOKAHEAD:
+        return 0
+    y = int(u[1] + 0.5)
+    m = 0
+    # keep clear of where the beam will shine (five rows below) from the moment it arrives
+    bottom = y + (8 if u[10] and u[2] != "out" and (u[10] < 0 or last_t < u[11]) else 4)
+    for row in range(y - 1, bottom + 1):
+        if 0 <= row < 16:
+            m |= 1 << row
+    return m
+
+def beaming():
+    u = ufo
+    return u[2] == "hover" and 0 < u[10] <= last_t < u[11]
+
+def draw_ufo(g, t):
+    u = ufo
+    x = int(u[0] + 0.5)
+    y = int(u[1] + 0.5)
+    if beaming():
+        # a widening cone of pale green light, shimmering
+        for j in range(1, 6):
+            yy = y + 3 + j
+            if yy > 15:
+                break
+            w = 1 + j // 3
+            for i in range(-w, w + 1):
+                xx = x + 3 + i
+                if 0 <= xx < 16 and (random.getrandbits(3) or i == 0):
+                    lv = (abs(i) + j // 3) // 2
+                    g.set_pen(BEAMPEN[lv if lv < 3 else 2])
+                    g.pixel(xx, yy)
+    def px(i, j, p):
+        xx = x + i
+        yy = y + j
+        if 0 <= xx < 16 and 0 <= yy < 16:
+            g.set_pen(p)
+            g.pixel(xx, yy)
+    px(2, 0, DOME[0])
+    px(3, 0, DOME[1])                          # a glint on the glass
+    px(4, 0, DOME[0])
+    for i in range(1, 6):
+        px(i, 1, SAUCER[0])
+    k = int(t * 8)
+    for i in range(7):                         # rim lights chase round
+        px(i, 2, LIGHTS[(i + k) % 4] if (i + k) % 2 == 0 else SAUCER[1])
+    for i in range(2, 5):
+        px(i, 3, SAUCER[2])
+
 def blocked(sx):
     """Rows (as bits) that asteroids ahead of the ship will pass through, plus a margin."""
-    m = 0
+    m = ufo_rows(sx) if ufo is not None else 0
     for r in rocks:
         if r[4]:
             rx = r[0] >> 8
@@ -282,7 +394,7 @@ def free(m, y):
 
 def frame(su, g, t):
     global ship_x, ship_y, target_x, target_y, cruise_y, next_cruise, next_drift, dodge, last_threat, shield
-    global a_was, b_was, body, body_x, next_body, next_rock, last_t, order
+    global a_was, b_was, body, body_x, next_body, next_rock, last_t, order, next_ufo, c_was
     dt = t - last_t
     if dt > 0.1:
         dt = 0.1          # after a pause, carry on instead of jumping ahead
@@ -294,7 +406,16 @@ def frame(su, g, t):
     if b and not b_was:
         body = None
         next_body = t
-    a_was, b_was = a, b
+    c = su.is_pressed(StellarUnicorn.SWITCH_C)
+    if c and not c_was and ufo is None:
+        next_ufo = t
+    a_was, b_was, c_was = a, b, c
+
+    # the flying saucer drops by now and then
+    if ufo is None and t >= next_ufo:
+        call_ufo(t)
+    if ufo is not None:
+        move_ufo(t, dt)
 
     # planets come and go
     if body is None and t >= next_body:
@@ -391,6 +512,8 @@ def frame(su, g, t):
     if OUTLINE:
         for x, y in RIM:
             halo(g, sx + x, sy + y)
+    if ufo is not None:
+        draw_ufo(g, t)
     # engine flame flickers
     fl = random.getrandbits(2)
     g.set_pen(FLAME[0])

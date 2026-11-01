@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Flying saucer (2026-11-01)
+
+- `spaceship.py`: a classic flying saucer (glass dome, silver hull, rim lights chasing round) visits every 25 to 70 seconds. It glides in from either side, hovers with a wobble, often shines a shimmering tractor beam down, then zips off up or down and away. The ship steers clear of it and its beam. C = call the saucer now. New Settings: how often, speed, hover time, beam chance.
+
 ## Mirror Life fades and palettes, and Slow Life (2026-11-01)
 
 - `mirrorlife.py`: new cells glow in and dead ones fade away (timed in seconds, so it stays smooth at any speed), and colours come from seven hand-made three-colour palettes (ember, lagoon, neon, citrus, aurora, candy, ice), a different one each round unless you pick one. New Settings for palette, fade in/out and newborn flash.
