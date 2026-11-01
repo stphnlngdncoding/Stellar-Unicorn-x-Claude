@@ -96,6 +96,21 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 .seg{align-self:flex-start}
 .mqin{font:inherit;font-size:1rem;width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--raise);color:var(--ink)}
 .mqin:focus{outline:2px solid var(--accent);outline-offset:1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:.85em;height:.85em;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-.1em;margin-right:6px}
+.btn.loading,.tile.loading{position:relative;pointer-events:none}
+.btn.loading{color:transparent}
+.btn.loading::after,.tile.loading::after,output.loading::after{content:"";position:absolute;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.btn.loading::after{left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px}
+.btn.pri.loading::after{border-color:color-mix(in srgb,var(--on-accent) 35%,transparent);border-top-color:var(--on-accent)}
+.tile.loading .led{opacity:.25}
+.tile.loading::after{left:21px;top:50%;width:18px;height:18px;margin-top:-9px}
+output.loading{position:relative;color:transparent}
+output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
+.working,.working *{cursor:progress}
+.mqin:disabled{opacity:.6}
+@media (max-width:420px){.tile.loading::after{left:17px}}
+@media (prefers-reduced-motion:reduce){.spin,.btn.loading::after,.tile.loading::after,output.loading::after{animation-duration:2.4s}}
 .toggle{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center}
 @media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px}.tile .td{display:none}.now .big{width:64px;height:64px}}
 </style>
@@ -103,7 +118,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 <div class="wrap">
   <header class="top">
     <h1>Unicorn Remote</h1>
-    <span class="conn" id="conn"><span class="dot" id="dot"></span><span id="connText">Connecting to the board…</span></span>
+    <span class="conn" id="conn"><span class="dot" id="dot"></span><span id="connText"><span class="spin" aria-hidden="true"></span>Connecting to the board…</span></span>
   </header>
 
   <section class="now" aria-labelledby="nowLabel">
@@ -126,7 +141,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
   <section class="tune" id="tune" hidden aria-labelledby="tuneH"></section>
 
   <section class="rot" aria-labelledby="rotH">
-    <div class="rothead"><h2 id="rotH">Rotation</h2><span class="foot" id="rotState">Loading the saved rotation…</span></div>
+    <div class="rothead"><h2 id="rotH">Rotation</h2><span class="foot" id="rotState"><span class="spin" aria-hidden="true"></span>Loading the saved rotation…</span></div>
     <ol class="chips" id="rotChips" aria-label="Rotation order. Drag to reorder, or focus one and use the arrow keys."></ol>
     <div class="rotrow">
       <label for="rotEvery">Switch every</label>
@@ -209,7 +224,15 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 
   // Until the board answers, show the library we know about so the page isn't empty.
   let S = { online: null, programs: Object.keys(CAT).concat([]), running: null, def: null, brightness: 0.5, sample: true };
-  let mcp = null, busy = false;
+  let mcp = null, busy = false, loadingTile = null;
+  const SPIN = '<span class="spin" aria-hidden="true"></span>';
+  // show that something is working: a spinner on the button (or tile, or readout) until it's done
+  function setLoading(el, on) {
+    if (!el) return;
+    el.classList.toggle("loading", on);
+    el.setAttribute("aria-busy", on ? "true" : "false");
+    if (el.tagName === "BUTTON") el.disabled = on;
+  }
 
   const info = n => CAT[n] || [n.replace(/\.py$/, "").replace(/[_-]+/g, " ").replace(/^./, c => c.toUpperCase()), "", hashCols(n), "Other"];
   function hashCols(n) {
@@ -244,17 +267,19 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     const raw = Array.isArray(v) ? "(" + v.map(x => pyNum(x, c, isInt)).join(", ") + ")" : pyNum(v, c, isInt);
     return src.replace(constRe(c.k), (m, a) => a + raw);
   }
-  async function openTune(n) {
+  async function openTune(n, el) {
     if (!TUNE[n]) { note(info(n)[0] + " has no settings to change."); return; }
     tune = { name: n, src: null, vals: {}, ints: {}, loading: true };
     renderTune(); $("tune").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (el) setLoading(el, true); else { loadingTile = n; render(); }
     try {
       const src = textOf(await call("get_program_source", { name: n }));
       if (!/def frame/.test(src)) throw { code: "tool_error", message: src || "couldn't read " + n };
       if (!tune || tune.name !== n) return;
       tune.src = src;
       for (const c of TUNE[n]) { const r = readConst(src, c.k); if (r) { tune.vals[c.k] = r.v; tune.ints[c.k] = r.isInt; } }
-    } catch (e) { tune = null; renderTune(); failNote(e, () => openTune(n)); return; }
+    } catch (e) { tune = null; renderTune(); failNote(e, () => openTune(n, el)); return; }
+    finally { if (el) setLoading(el, false); else if (loadingTile === n) { loadingTile = null; render(); } }
     tune.loading = false; renderTune();
   }
   function knob(c) {
@@ -268,7 +293,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     if (!tune) { el.hidden = true; el.innerHTML = ""; return; }
     el.hidden = false;
     let h = `<div class="rothead"><h2 id="tuneH">Settings · ${esc(info(tune.name)[0])}</h2><button type="button" class="x" id="tuneClose" aria-label="Close settings">×</button></div>`;
-    if (tune.loading) h += '<p class="foot">Reading the program from the board…</p>';
+    if (tune.loading) h += '<p class="foot">' + SPIN + 'Reading the program from the board…</p>';
     else {
       const cs = TUNE[tune.name].filter(c => c.k in tune.vals);
       h += cs.length ? '<div class="knobs">' + cs.map(knob).join("") + "</div>" : '<p class="foot">This copy of the program has none of the usual settings.</p>';
@@ -296,6 +321,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     $("mqState").textContent = S.running === MQ ? "Playing now" : "";
   }
   async function loadMarquee() {
+    $("mqState").innerHTML = SPIN + "Loading…"; $("mqText").disabled = true; $("mqGo").disabled = true;
     try {
       const t = textOf(await call("get_program_source", { name: MQ }));
       const m = t.match(/^MESSAGE = (".*")\s*$/m), st = t.match(/^STYLE\s*=\s*(\d+)/m), sp = t.match(/^SPEED\s*=\s*(\d+)/m);
@@ -303,13 +329,14 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
       if (st) mq.style = +st[1];
       if (sp) mq.speed = +sp[1];
     } catch (e) { /* no marquee saved yet */ }
+    $("mqText").disabled = false; $("mqGo").disabled = false;
     renderMq();
   }
   function sendMarquee() {
     const text = plainText($("mqText").value);
     if (!text) { note("Type a message first."); $("mqText").focus(); return; }
     $("mqText").value = text;
-    act("upload_program", { name: MQ, code: mqCode(text), run: true, make_default: false }, () => { S.running = MQ; renderMq(); note("Showing your message on the board."); });
+    act("upload_program", { name: MQ, code: mqCode(text), run: true, make_default: false }, () => { S.running = MQ; renderMq(); note("Showing your message on the board."); }, $("mqGo"));
   }
 
   const everyText = s => s < 3600 ? (s / 60) + " min" : (s / 3600) + " h";
@@ -320,7 +347,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     c.innerHTML = rot.list.length ? rot.list.map((n, i) => `<li class="chip${drag && drag.i === i ? " dragging" : ""}" data-i="${i}" tabindex="0" aria-label="${i + 1}. ${esc(info(n)[0])}"><span class="grip" aria-hidden="true">⋮⋮</span><b>${i + 1}</b><span style="display:flex;gap:8px;align-items:center;min-width:0"><span class="led" aria-hidden="true">${led(info(n)[2], 4)}</span><span class="cn">${esc(info(n)[0])}</span></span><button type="button" data-rm="${esc(n)}" aria-label="Take ${esc(info(n)[0])} out of the rotation">×</button></li>`).join("")
       : '<li class="foot">No programs yet. Switch to “Rotation” below and tap the ones you want. Then drag them into order here.</li>';
     if (drag && drag.focus) { const el = c.querySelector(`[data-i="${drag.i}"]`); if (el) el.focus(); drag = null; }
-    $("rotState").textContent = !rot.loaded ? "Loading the saved rotation…" : S.running === ROT ? "Playing now" : rot.list.length ? "Not playing" : "";
+    $("rotState").innerHTML = !rot.loaded ? SPIN + "Loading the saved rotation…" : S.running === ROT ? "Playing now" : rot.list.length ? "Not playing" : "";
     $("rotStart").disabled = !rot.list.length;
     if (document.activeElement !== $("rotEvery")) { const v = String(rot.secs); if ([...$("rotEvery").options].some(o => o.value === v)) $("rotEvery").value = v; }
   }
@@ -342,7 +369,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
   function render() {
     const R = S.running, D = S.def;
     $("dot").className = "dot" + (S.online ? " on" : "");
-    $("connText").textContent = S.sample ? "Connecting to the board…" : S.online ? "Board online" : "Board offline";
+    $("connText").innerHTML = S.sample ? SPIN + "Connecting to the board…" : S.online ? "Board online" : "Board offline";
     if (R === ROT) { $("nowName").textContent = "Rotation"; $("nowLed").innerHTML = led(rot.list.length ? info(rot.list[0])[2] : ["#8f7bff", "#3df2ff", "#ff7ad9", "#ffd23d"], 6); }
     else if (R) { const I = info(R); $("nowName").textContent = I[0]; $("nowLed").innerHTML = led(I[2], 6); }
     else { $("nowName").textContent = S.sample ? "…" : "Nothing playing"; $("nowLed").innerHTML = led(["#333", "#333", "#333", "#333"], 6); }
@@ -354,7 +381,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     S.programs.filter(n => !HIDE(n)).forEach(n => { const g = info(n)[3]; (groups[g] = groups[g] || []).push(n); });
     $("library").innerHTML = ORDER.filter(g => groups[g]).map(g => `<section class="group"><h2>${esc(g)}</h2><div class="grid">${groups[g].map(n => {
       const I = info(n), on = n === R, star = n === D, ri = rot.list.indexOf(n), off = (mode === "rotation" && LEGACY.has(n)) || (mode === "tune" && !TUNE[n]);
-      return `<button type="button" class="tile" data-n="${esc(n)}" aria-pressed="${on}"${off ? " disabled" : ""}>${mode === "rotation" && ri >= 0 ? `<span class="order">${ri + 1}</span>` : ""}<div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
+      return `<button type="button" class="tile${n === loadingTile ? " loading" : ""}" data-n="${esc(n)}" aria-pressed="${on}"${n === loadingTile ? ' aria-busy="true"' : ""}${off ? " disabled" : ""}>${mode === "rotation" && ri >= 0 ? `<span class="order">${ri + 1}</span>` : ""}<div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
     }).join("")}</div></section>`).join("");
   }
 
@@ -419,29 +446,37 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
       render();
     } catch (e) { failNote(e, refresh); }
   }
-  async function act(tool, input, done) {
+  // el: the button or readout that started it, or a program name for a tile
+  async function act(tool, input, done, el) {
     if (busy) return; busy = true;
-    try { const r = await call(tool, input); const t = textOf(r); if (/^error/i.test(t)) note(t, "bad"); else { note(""); done && done(t); } render(); }
-    catch (e) { failNote(e, () => act(tool, input, done)); }
-    finally { busy = false; }
+    const tile = typeof el === "string" ? el : null;
+    if (tile) { loadingTile = tile; render(); } else setLoading(el, true);
+    document.body.classList.add("working");
+    try { const r = await call(tool, input); const t = textOf(r); if (/^error/i.test(t)) note(t, "bad"); else { note(""); done && done(t); } }
+    catch (e) { failNote(e, () => act(tool, input, done, el)); }
+    finally {
+      busy = false; document.body.classList.remove("working");
+      if (tile) loadingTile = null; else setLoading(el, false);
+      render();
+    }
   }
 
   $("library").addEventListener("click", e => {
     const b = e.target.closest(".tile"); if (!b) return;
     const n = b.dataset.n;
-    if (mode === "default") { act("set_default_program", { name: n }, () => { S.def = n; setMode("play"); }); return; }
+    if (mode === "default") { act("set_default_program", { name: n }, () => { S.def = n; setMode("play"); }, n); return; }
     if (mode === "tune") { openTune(n); return; }
     if (mode === "rotation") { const i = rot.list.indexOf(n); if (i >= 0) rot.list.splice(i, 1); else rot.list.push(n); render(); return; }
     if (LEGACY.has(n)) note(info(n)[0] + " restarts the board. Press the sleep button on the board to come back.");
     S.running = n; render();
-    act("run_program", { name: n }, () => { S.running = n; });
+    act("run_program", { name: n }, () => { S.running = n; }, n);
   });
-  $("stopBtn").onclick = () => act("stop_program", {}, () => { S.running = null; });
-  $("refreshBtn").onclick = refresh;
+  $("stopBtn").onclick = () => act("stop_program", {}, () => { S.running = null; }, $("stopBtn"));
+  $("refreshBtn").onclick = async () => { setLoading($("refreshBtn"), true); try { await refresh(); } finally { setLoading($("refreshBtn"), false); } };
   let bt = null;
   $("bright").addEventListener("input", e => {
     const v = +e.target.value; $("brightOut").textContent = v + "%";
-    clearTimeout(bt); bt = setTimeout(() => act("set_brightness", { value: v / 100 }, () => { S.brightness = v / 100; }), 350);
+    clearTimeout(bt); bt = setTimeout(() => act("set_brightness", { value: v / 100 }, () => { S.brightness = v / 100; }, $("brightOut")), 350);
   });
   function setMode(m) {
     mode = m; $("hint").textContent = HINTS[m];
@@ -475,7 +510,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
   $("rotStart").onclick = () => {
     if (!rot.list.length) return;
     const mk = $("rotDefault").checked;
-    act("upload_program", { name: ROT, code: rotCode(), run: true, make_default: mk }, t => { S.running = ROT; if (mk) S.def = ROT; setMode("play"); note("Rotation started: " + rotSummary() + "."); });
+    act("upload_program", { name: ROT, code: rotCode(), run: true, make_default: mk }, t => { S.running = ROT; if (mk) S.def = ROT; setMode("play"); note("Rotation started: " + rotSummary() + "."); }, $("rotStart"));
   };
 
   $("tune").addEventListener("input", e => {
@@ -496,9 +531,9 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
     let src = tune.src;
     for (const c of TUNE[tune.name]) if (c.k in tune.vals) { let v = tune.vals[c.k]; if (Array.isArray(v)) v = [Math.min(...v), Math.max(...v)]; src = writeConst(src, c, v, tune.ints[c.k]); }
     const run = a.dataset.apply === "1", n = tune.name;
-    act("upload_program", { name: n, code: src, run, make_default: false }, () => { if (tune && tune.name === n) tune.src = src; if (run) S.running = n; note((run ? "Playing " : "Saved ") + info(n)[0] + " with your settings."); });
+    act("upload_program", { name: n, code: src, run, make_default: false }, () => { if (tune && tune.name === n) tune.src = src; if (run) S.running = n; note((run ? "Playing " : "Saved ") + info(n)[0] + " with your settings."); }, a);
   });
-  $("tuneBtn").onclick = () => { if (S.running && TUNE[S.running]) openTune(S.running); else note("Switch to Settings below and tap a program to change it."); };
+  $("tuneBtn").onclick = () => { if (S.running && TUNE[S.running]) openTune(S.running, $("tuneBtn")); else note("Switch to Settings below and tap a program to change it."); };
   $("mqGo").onclick = sendMarquee;
   $("mqText").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendMarquee(); } });
   $("mqStyle").addEventListener("click", e => { const b = e.target.closest("[data-st]"); if (b) { mq.style = +b.dataset.st; renderMq(); } });
