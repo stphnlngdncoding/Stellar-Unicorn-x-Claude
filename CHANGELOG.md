@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## World, and a moon for Fireflies (2026-11-01)
+
+- **`world.py`**: a meadow under the real sky over Marina del Rey (set `LAT`/`LON` for elsewhere). The sun and moon are placed from the board's clock with standard low-precision formulas (about a degree), so they rise, cross and set on time; the moon shows its real phase; the sky glows at dawn and dusk. Weather comes from Open-Meteo over plain HTTP every 15 minutes (each fetch pauses the animation for about a third of a second): clear, cloudy, fog, rain, snow or thunderstorm, eased in gradually. By day butterflies, a hopping bunny and passing birds; at night stars and fireflies. A = fast-forward through a day. Settings: weather (live or fixed), fast time, critter counts, report interval.
+- `fireflies.py`: a moon in tonight's real phase, top left (`MOON` setting).
+
 ## Boat (2026-10-31)
 
 - **`boat.py`**: a sailboat rides the waves while the weather turns between sunny spells (blue sea, sun, white clouds) and storms (dark sky, slanting rain, whitecaps, the odd lightning flash), with the boat tossed and rolled harder as the sea builds. A = change the weather. Settings in the Remote.

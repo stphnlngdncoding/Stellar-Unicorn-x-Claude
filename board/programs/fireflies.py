@@ -4,7 +4,8 @@
 # its own colour and a depth: near ones are bigger, brighter, warmer and
 # quicker; far ones are small, dim, greener and drift slowly. Now and then
 # they all flash together in a wave that rolls across the board. A few stars
-# twinkle above the grass.
+# twinkle above the grass, and the moon hangs in the sky showing tonight's
+# real phase (worked out from the board's clock).
 #   A = set off a flash wave now
 #
 # PACE slows the dark drifting and how often they light up: at the very
@@ -14,7 +15,9 @@
 #
 # Memory-friendly: positions are integers (1/4096 of a pixel), the trail is a
 # bytearray, and every pen is made once in setup().
+import math
 import random
+import time
 from stellar import StellarUnicorn
 
 COUNT = 16           # how many fireflies
@@ -24,6 +27,7 @@ DARK = (70, 280)     # frames a firefly stays dark between lights at PACE 1 (min
 LIT_S = (3.0, 6.0)   # seconds a firefly stays lit (min, max)
 LIT_SPEED = 380      # how fast lit fireflies zip about, 1/4096 px per frame (380 is about 2.3 px a second)
 WAVE_S = (40, 90)    # seconds between flash waves (min, max)
+MOON = 1             # 1 = show the moon in its real phase, 0 = no moon
 FRAME = 0.04
 LEVELS = 16
 
@@ -36,7 +40,7 @@ DEPTH_SPEED = (0.45, 0.7, 1.0)
 DEPTH_HALO = (16, 11, 6)     # halo shows above this brightness (16 = never)
 
 def setup(su, g):
-    global BG, STAR, NUDGE, flies, trail, trail_fly, next_wave, a_was, frames
+    global BG, STAR, NUDGE, flies, trail, trail_fly, next_wave, a_was, frames, MOONPEN, phase, phase_t
     NUDGE = max(1, int(32 * PACE))
     # the night: a deep blue sky that darkens towards the ground, and grass
     grass = [random.choice((1, 1, 2, 2, 2, 3)) for _ in range(16)]
@@ -52,6 +56,9 @@ def setup(su, g):
                 f = 12 - y if y < 12 else 0
                 BG.append(g.create_pen(f // 3, f // 2 + 1, 4 + f * 2))
     STAR = [g.create_pen(v * 9, v * 10, v * 14) for v in range(LEVELS)]
+    MOONPEN = (g.create_pen(225, 225, 200), g.create_pen(22, 24, 38), g.create_pen(16, 20, 40))   # lit, dark, glow
+    phase = moon_phase()
+    phase_t = 0.0
     # each firefly: [x, y, vx, vy, countdown, lit frame (-1 = dark),
     #                frames lit, depth, glow pens, halo pens, glimmer]
     flies = []
@@ -74,6 +81,43 @@ def setup(su, g):
     a_was = False
     frames = 0
 
+def rad(d):
+    return d * 0.017453292519943295
+
+def deg(r):
+    return r * 57.29577951308232
+
+def moon_phase():
+    """(lit fraction 0..1, waxing?) for right now, from the board's clock."""
+    try:
+        y, m, d, hh, mi = time.gmtime()[:5]
+    except Exception:
+        return 0.5, True
+    if m <= 2:
+        y -= 1
+        m += 12
+    a = y // 100
+    days = (1461 * (y + 4716)) // 4 + (306001 * (m + 1)) // 10000 + d + 2 - a + a // 4 - 1525 - 2451545
+    n = days + (hh + mi / 60) / 24 + 0.5
+    sun = rad(280.460 + 0.9856474 * n + 1.915 * math.sin(rad(357.528 + 0.9856003 * n)))
+    moon = rad(218.316 + 13.176396 * n + 6.289 * math.sin(rad(134.963 + 13.064993 * n)))
+    e = moon - sun
+    return (1 - math.cos(e)) / 2, math.sin(e) > 0
+
+def draw_moon(g, cx, cy):
+    lit, waxing = phase
+    edge = 1.5 * (1 - 2 * lit)                 # where the shadow edge falls across the disc
+    g.set_pen(MOONPEN[2])                      # a faint glow round it
+    for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+        g.pixel(cx + dx, cy + dy)
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            if dx and dy:
+                continue
+            side = dx if waxing else -dx
+            g.set_pen(MOONPEN[0] if side + 0.5 > edge else MOONPEN[1])
+            g.pixel(cx + dx, cy + dy)
+
 def dark_frames():
     return int(random.randint(DARK[0], DARK[1]) / PACE)
 
@@ -86,7 +130,7 @@ def wave():
             f[4] = (px if left else 15 - px) * 4 + random.randrange(4)
 
 def frame(su, g, t):
-    global next_wave, a_was, frames
+    global next_wave, a_was, frames, phase, phase_t
     frames += 1
     a = su.is_pressed(StellarUnicorn.SWITCH_A)
     if (a and not a_was) or t >= next_wave:
@@ -104,6 +148,11 @@ def frame(su, g, t):
         if v > 12:
             g.set_pen(STAR[v >> 2])
             g.pixel((i * 7 + 3) % 16, (i * 5) % 6)
+    if MOON:
+        if t - phase_t > 600:                  # the phase barely changes; check every 10 minutes
+            phase = moon_phase()
+            phase_t = t
+        draw_moon(g, 3, 3)
 
     # ---- trails fade (half speed: every other frame) ----
     fade = frames & 1
