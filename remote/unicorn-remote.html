@@ -145,7 +145,7 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 
   <div class="sel">
     <span class="foot" id="hint"></span>
-    <div class="modes" role="group" aria-label="What tapping a program does">
+    <div class="modes" id="modeGroup" role="group" aria-label="What tapping a program does">
       <button type="button" data-mode="play" aria-pressed="true">Play</button>
       <button type="button" data-mode="default" aria-pressed="false">Power-on</button>
       <button type="button" data-mode="rotation" aria-pressed="false">Rotation</button>
@@ -414,10 +414,10 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
   });
   function setMode(m) {
     mode = m; $("hint").textContent = HINTS[m];
-    document.querySelectorAll(".modes button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+    document.querySelectorAll("#modeGroup button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
     render();
   }
-  document.querySelector(".modes").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
+  document.getElementById("modeGroup").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
   $("rotChips").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (!b) return; rot.list = rot.list.filter(n => n !== b.dataset.rm); render(); });
   // drag to reorder: pointer events, so it works with a finger as well as a mouse
   $("rotChips").addEventListener("pointerdown", e => {
