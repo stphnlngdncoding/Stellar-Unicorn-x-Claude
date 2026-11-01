@@ -5,6 +5,15 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Remote UX pass (2026-11-01)
+
+- **Programs first on a phone**: the Rotation and Marquee cards fold to a one-line summary ("3 programs · every 10 min", the current message) and remember whether you left them open, so the library starts on the first screen.
+- **Sticky library bar** with the Play / Power-on / Rotation / Settings switch and shortcuts to each group. Outside Play mode the hint turns accent-coloured with a *Done* button, and choosing Rotation opens the rotation card.
+- Tiles follow the curated order within each group instead of alphabetical.
+- Messages are a toast at the bottom of the screen, so they're seen wherever you've scrolled; confirmations fade after a few seconds, errors stay until dismissed.
+- Stop and Settings are disabled when they can't do anything; Refresh is now a small icon next to the connection status.
+- Settings choices (like World's seven weather options) wrap instead of running off the screen; bigger touch targets for buttons; the rotation number badge no longer covers tile names.
+
 ## Remote categories (2026-11-01)
 
 - The Unicorn Remote groups programs by theme instead of Calm / Lively / Games: Outdoors, Space, Ambient, Neon, Physics, Life, Games, Music and Classics (artifact and `local/`).

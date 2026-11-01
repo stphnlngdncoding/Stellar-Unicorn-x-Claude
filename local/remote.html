@@ -39,12 +39,17 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 .nowname{font-family:var(--display);font-size:1.5rem;font-weight:700;line-height:1.1;overflow-wrap:anywhere}
 .nowsub{font-size:.88rem;color:var(--muted)}
 .ctrls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:10px;padding:7px 12px;font-weight:600;font-size:.88rem}
+.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:10px;padding:8px 14px;min-height:40px;font-weight:600;font-size:.88rem}
 .btn:disabled{opacity:.5;cursor:default}
 .bright{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);flex:1 1 180px}
+.now .bright{flex-basis:100%}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .bright input{flex:1;accent-color:var(--accent);min-width:0}
 .bright output{font-family:var(--mono);font-size:.8rem;width:3.2em;text-align:right;color:var(--ink)}
-.msg{font-size:.88rem;border-radius:10px;padding:10px 12px;background:var(--raise);border:1px solid var(--line);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.msg{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:20;width:min(728px,calc(100% - 32px));font-size:.9rem;border-radius:12px;padding:10px 10px 10px 14px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.18);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;animation:rise .18s ease-out}
+.msg .x{margin-left:auto}
+@keyframes rise{from{opacity:0;transform:translate(-50%,8px)}}
+@media (prefers-reduced-motion:reduce){.msg{animation:none}}
 .msg.bad{border-color:color-mix(in srgb,var(--bad) 50%,var(--line));color:var(--bad)}
 .group{display:flex;flex-direction:column;gap:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
@@ -66,7 +71,30 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 .menu{display:flex;gap:6px;flex-wrap:wrap}
 .foot{font-size:.8rem;color:var(--muted)}
 .modes{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
-.modes button{border:0;background:none;padding:6px 12px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.modes button{border:0;background:none;padding:6px 12px;min-height:36px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.modes.seg{display:flex;flex-wrap:wrap;gap:6px;border:0;border-radius:0;overflow:visible}
+.modes.seg button{border:1.5px solid var(--line);border-radius:9px;padding:5px 11px}
+.modes.seg button[aria-pressed="true"]{border-color:var(--accent)}
+.foldhead{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:none;border:0;padding:2px 0;text-align:left;min-height:32px}
+.foldhead .sum{font-size:.8rem;color:var(--muted);margin-left:auto;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.chev{flex:none;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+.fold[aria-expanded="true"] .chev{transform:rotate(-135deg) translate(-2px,0)}
+.foldbody{display:flex;flex-direction:column;gap:10px}
+.libbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0 8px;margin:-10px 0 -8px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 0 var(--line)}
+.jump{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.jump::-webkit-scrollbar{display:none}
+.jump{-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:24px}
+#hint{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1 1 100%;min-height:30px}
+.jump button{flex:none;border:1.5px solid var(--line);background:var(--panel);border-radius:99px;padding:4px 11px;font-size:.78rem;font-weight:600;color:var(--muted);min-height:30px}
+.group{scroll-margin-top:110px}
+.sel.alt .foot{color:var(--accent);font-weight:600}
+.iconbtn{border:0;background:none;width:36px;height:36px;border-radius:9px;color:var(--muted);display:inline-grid;place-items:center;padding:0}
+.iconbtn:hover{background:var(--raise);color:var(--ink)}
+.iconbtn svg{width:18px;height:18px}
+.iconbtn.loading svg{visibility:hidden}
+.iconbtn.loading::after{left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px}
+.connrow{display:flex;align-items:center;gap:4px}
+.tile.has-order{padding-right:34px}
 .modes button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
 .rot{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .rothead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
@@ -98,9 +126,9 @@ h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-
 .mqin:focus{outline:2px solid var(--accent);outline-offset:1px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;width:.85em;height:.85em;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-.1em;margin-right:6px}
-.btn.loading,.tile.loading{position:relative;pointer-events:none}
+.btn.loading,.tile.loading,.iconbtn.loading{position:relative;pointer-events:none}
 .btn.loading{color:transparent}
-.btn.loading::after,.tile.loading::after,output.loading::after{content:"";position:absolute;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.btn.loading::after,.tile.loading::after,output.loading::after,.iconbtn.loading::after{content:"";position:absolute;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
 .btn.loading::after{left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px}
 .btn.pri.loading::after{border-color:color-mix(in srgb,var(--on-accent) 35%,transparent);border-top-color:var(--on-accent)}
 .tile.loading .led{opacity:.25}
@@ -112,13 +140,14 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
 @media (max-width:420px){.tile.loading::after{left:17px}}
 @media (prefers-reduced-motion:reduce){.spin,.btn.loading::after,.tile.loading::after,output.loading::after{animation-duration:2.4s}}
 .toggle{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center}
-@media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px}.tile .td{display:none}.now .big{width:64px;height:64px}}
+@media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px;min-height:56px}.tile .td{display:none}.now{gap:12px;padding:14px}.now .big{width:64px;height:64px;align-self:start}.wrap{gap:18px}}
 </style>
 
 <div class="wrap">
   <header class="top">
     <h1>Unicorn Remote</h1>
-    <span class="conn" id="conn"><span class="dot" id="dot"></span><span id="connText"><span class="spin" aria-hidden="true"></span>Connecting to the board…</span></span>
+    <div class="connrow"><span class="conn" id="conn" role="status"><span class="dot" id="dot"></span><span id="connText"><span class="spin" aria-hidden="true"></span>Connecting to the board…</span></span>
+      <button type="button" class="iconbtn" id="refreshBtn" aria-label="Check the board again" title="Check the board again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></div>
   </header>
 
   <section class="now" aria-labelledby="nowLabel">
@@ -129,19 +158,19 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
       <span class="nowsub" id="nowSub">Power-on: Plasma</span>
       <div class="ctrls">
         <label class="bright" for="bright">Brightness <input type="range" id="bright" min="5" max="100" step="5" value="50"><output id="brightOut">50%</output></label>
-        <button type="button" class="btn" id="stopBtn">Stop</button>
-        <button type="button" class="btn" id="tuneBtn">Settings</button>
-        <button type="button" class="btn" id="refreshBtn">Refresh</button>
+        <div class="btnrow"><button type="button" class="btn" id="stopBtn">Stop</button>
+        <button type="button" class="btn" id="tuneBtn">Settings</button></div>
       </div>
     </div>
   </section>
 
-  <div class="msg" id="msg" hidden></div>
+  <div class="msg" id="msg" role="status" aria-live="polite" hidden></div>
 
   <section class="tune" id="tune" hidden aria-labelledby="tuneH"></section>
 
   <section class="rot" aria-labelledby="rotH">
-    <div class="rothead"><h2 id="rotH">Rotation</h2><span class="foot" id="rotState"><span class="spin" aria-hidden="true"></span>Loading the saved rotation…</span></div>
+    <button type="button" class="foldhead fold" id="rotFold" aria-expanded="false" aria-controls="rotBody"><h2 id="rotH">Rotation</h2><span class="sum" id="rotState"><span class="spin" aria-hidden="true"></span>Loading…</span><span class="chev" aria-hidden="true"></span></button>
+    <div class="foldbody" id="rotBody" hidden>
     <ol class="chips" id="rotChips" aria-label="Rotation order. Drag to reorder, or focus one and use the arrow keys."></ol>
     <div class="rotrow">
       <label for="rotEvery">Switch every</label>
@@ -149,26 +178,32 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
       <label class="toggle" for="rotDefault"><input type="checkbox" id="rotDefault"> Also play at power-on</label>
       <button type="button" class="btn pri" id="rotStart">Start rotation</button>
     </div>
+    </div>
   </section>
 
   <section class="rot" aria-labelledby="mqH">
-    <div class="rothead"><h2 id="mqH">Marquee</h2><span class="foot" id="mqState"></span></div>
+    <button type="button" class="foldhead fold" id="mqFold" aria-expanded="false" aria-controls="mqBody"><h2 id="mqH">Marquee</h2><span class="sum" id="mqState"></span><span class="chev" aria-hidden="true"></span></button>
+    <div class="foldbody" id="mqBody" hidden>
     <input type="text" id="mqText" class="mqin" maxlength="160" placeholder="Type a message to scroll across the board" autocomplete="off" enterkeyhint="send" aria-label="Marquee message">
     <div class="rotrow">
       <div class="modes" id="mqStyle" role="group" aria-label="Marquee colours"><button type="button" data-st="0" aria-pressed="true">Rainbow</button><button type="button" data-st="4" aria-pressed="false">Neon</button><button type="button" data-st="2" aria-pressed="false">Warm</button><button type="button" data-st="3" aria-pressed="false">Cool</button><button type="button" data-st="1" aria-pressed="false">White</button></div>
       <label class="bright" for="mqSpeed">Speed <input type="range" id="mqSpeed" min="4" max="40" step="1" value="12"><output id="mqSpeedOut">12</output></label>
       <button type="button" class="btn pri" id="mqGo">Show on board</button>
     </div>
+    </div>
   </section>
 
-  <div class="sel">
-    <span class="foot" id="hint"></span>
-    <div class="modes" id="modeGroup" role="group" aria-label="What tapping a program does">
-      <button type="button" data-mode="play" aria-pressed="true">Play</button>
-      <button type="button" data-mode="default" aria-pressed="false">Power-on</button>
-      <button type="button" data-mode="rotation" aria-pressed="false">Rotation</button>
-      <button type="button" data-mode="tune" aria-pressed="false">Settings</button>
+  <div class="libbar">
+    <div class="sel" id="sel">
+      <div class="modes" id="modeGroup" role="group" aria-label="What tapping a program does">
+        <button type="button" data-mode="play" aria-pressed="true">Play</button>
+        <button type="button" data-mode="default" aria-pressed="false">Power-on</button>
+        <button type="button" data-mode="rotation" aria-pressed="false">Rotation</button>
+        <button type="button" data-mode="tune" aria-pressed="false">Settings</button>
+      </div>
+      <span class="foot" id="hint" aria-live="polite"></span>
     </div>
+    <nav class="jump" id="jump" aria-label="Jump to a group"></nav>
   </div>
 
   <div id="library" style="display:flex;flex-direction:column;gap:22px"></div>
@@ -220,7 +255,16 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
   const ROT = "rotation.py";
   const ENGINE = "# ---- the rest runs the playlist ----\nimport gc, time\n\ndef _load(name):\n    global cur, cur_name, cur_t0\n    cur, cur_name = None, None\n    gc.collect()\n    try:\n        with open(name) as f:\n            src = f.read()\n        if \"def frame\" not in src:\n            raise ValueError(\"old-style program\")\n        env = {\"__name__\": name[:-3]}\n        if \"local_time\" in globals():\n            env[\"local_time\"] = local_time\n        exec(src, env)\n        del src\n        G.set_font(\"bitmap8\")\n        G.set_pen(G.create_pen(0, 0, 0))\n        G.clear()\n        if \"setup\" in env:\n            env[\"setup\"](SU, G)\n        cur, cur_name = env, name\n    except Exception as e:\n        print(\"rotation: skipping\", name, repr(e))\n        bad.append(name)\n    cur_t0 = None\n\ndef _pick():\n    items = [n for n in PLAYLIST if n not in bad]\n    if not items:\n        return None\n    return items[int(time.time() // max(10, SECONDS)) % len(items)]\n\ndef setup(su, g):\n    global SU, G, bad, cur, cur_name, cur_t0\n    SU, G = su, g\n    bad, cur, cur_name, cur_t0 = [], None, None, None\n\ndef frame(su, g, t):\n    global cur_t0, cur\n    want = _pick()\n    if want is None:\n        g.set_pen(g.create_pen(0, 0, 0))\n        g.clear()\n        return 0.5\n    if want != cur_name:\n        _load(want)\n        if cur is None:\n            return 0.05\n    if cur_t0 is None:\n        cur_t0 = t\n    try:\n        return cur[\"frame\"](su, g, t - cur_t0)\n    except Exception as e:\n        print(\"rotation: error in\", cur_name, repr(e))\n        bad.append(cur_name)\n        cur = None\n        return 0.05\n";
   let mode = "play", rot = { list: [], secs: 600, loaded: false };
-  const HINTS = { play: "Tap a program to play it.", default: "Tap the program that should play when the board powers on.", rotation: "Tap programs to add them to the rotation, in order. Tap again to take one out.", tune: "Tap a program to change its settings." };
+  const HINTS = { play: "Tap a program to play it.", default: "Tap the program to play at power-on.", rotation: "Tap programs to add or remove them from the rotation.", tune: "Tap a program to change its settings." };
+  // folding cards: remembered per viewer, best effort
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+  function fold(id, open, keep) {
+    const b = document.getElementById(id), body = document.getElementById(b.getAttribute("aria-controls"));
+    b.setAttribute("aria-expanded", open); body.hidden = !open;
+    if (keep !== false) store.set("fold:" + id, open ? "1" : "0");
+  }
+  const RANK = Object.fromEntries(Object.keys(CAT).map((n, i) => [n, i]));
+  const byCat = (a, b) => (RANK[a] ?? 999) - (RANK[b] ?? 999) || info(a)[0].localeCompare(info(b)[0]);
   const LEGACY = new Set(["fire.py", "supercomputer.py", "today.py"]);
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -321,14 +365,15 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
   function renderMq() {
     document.querySelectorAll("#mqStyle [data-st]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.st === mq.style));
     $("mqSpeed").value = mq.speed; $("mqSpeedOut").textContent = mq.speed;
-    $("mqState").textContent = S.running === MQ ? "Playing now" : "";
+    const msg = $("mqText").value.trim();
+    $("mqState").textContent = S.running === MQ ? "Playing now" : msg ? "“" + (msg.length > 28 ? msg.slice(0, 27) + "…" : msg) + "”" : "Scroll a message";
   }
   async function loadMarquee() {
     $("mqState").innerHTML = SPIN + "Loading…"; $("mqText").disabled = true; $("mqGo").disabled = true;
     try {
       const t = textOf(await call("get_program_source", { name: MQ }));
       const m = t.match(/^MESSAGE = (".*")\s*$/m), st = t.match(/^STYLE\s*=\s*(\d+)/m), sp = t.match(/^SPEED\s*=\s*(\d+)/m);
-      if (m && !$("mqText").value) { try { $("mqText").value = JSON.parse(m[1]); } catch (e) {} }
+      if (m && !$("mqText").value) { try { $("mqText").value = JSON.parse(m[1]); } catch (e) {} }  // fills the fold summary too
       if (st) mq.style = +st[1];
       if (sp) mq.speed = +sp[1];
     } catch (e) { /* no marquee saved yet */ }
@@ -348,9 +393,9 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
   function renderRot() {
     const c = $("rotChips");
     c.innerHTML = rot.list.length ? rot.list.map((n, i) => `<li class="chip${drag && drag.i === i ? " dragging" : ""}" data-i="${i}" tabindex="0" aria-label="${i + 1}. ${esc(info(n)[0])}"><span class="grip" aria-hidden="true">⋮⋮</span><b>${i + 1}</b><span style="display:flex;gap:8px;align-items:center;min-width:0"><span class="led" aria-hidden="true">${led(info(n)[2], 4)}</span><span class="cn">${esc(info(n)[0])}</span></span><button type="button" data-rm="${esc(n)}" aria-label="Take ${esc(info(n)[0])} out of the rotation">×</button></li>`).join("")
-      : '<li class="foot">No programs yet. Switch to “Rotation” below and tap the ones you want. Then drag them into order here.</li>';
+      : '<li class="foot">No programs yet. Choose “Rotation” above the programs and tap the ones you want, then drag them into order here.</li>';
     if (drag && drag.focus) { const el = c.querySelector(`[data-i="${drag.i}"]`); if (el) el.focus(); drag = null; }
-    $("rotState").innerHTML = !rot.loaded ? SPIN + "Loading the saved rotation…" : S.running === ROT ? "Playing now" : rot.list.length ? "Not playing" : "";
+    $("rotState").innerHTML = !rot.loaded ? SPIN + "Loading…" : !rot.list.length ? "Take turns between programs" : esc(rot.list.length + " program" + (rot.list.length === 1 ? "" : "s") + " · " + (S.running === ROT ? "playing now" : "every " + everyText(rot.secs)));
     $("rotStart").disabled = !rot.list.length;
     if (document.activeElement !== $("rotEvery")) { const v = String(rot.secs); if ([...$("rotEvery").options].some(o => o.value === v)) $("rotEvery").value = v; }
   }
@@ -380,20 +425,29 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
     renderRot();
     if (typeof renderMq === "function") renderMq();
     const b = Math.round((S.brightness ?? 0.5) * 100); if (document.activeElement !== $("bright")) { $("bright").value = b; $("brightOut").textContent = b + "%"; }
+    if (!$("stopBtn").classList.contains("loading")) $("stopBtn").disabled = !R;
+    if (!$("tuneBtn").classList.contains("loading")) { const can = !!(R && TUNE[R]); $("tuneBtn").disabled = !can; $("tuneBtn").title = can ? "Change " + info(R)[0] + "'s settings" : R ? info(R)[0] + " has no settings" : "Nothing playing"; }
     const groups = {};
     S.programs.filter(n => !HIDE(n)).forEach(n => { const g = info(n)[3]; (groups[g] = groups[g] || []).push(n); });
-    $("library").innerHTML = ORDER.filter(g => groups[g]).map(g => `<section class="group"><h2>${esc(g)}</h2><div class="grid">${groups[g].map(n => {
+    const gs = ORDER.filter(g => groups[g]);
+    const jh = gs.map(g => `<button type="button" data-jump="${esc(g)}">${esc(g)}</button>`).join("");
+    if ($("jump").innerHTML !== jh) $("jump").innerHTML = jh;
+    $("library").innerHTML = gs.map(g => `<section class="group" id="g-${esc(g)}"><h2>${esc(g)}</h2><div class="grid">${groups[g].sort(byCat).map(n => {
       const I = info(n), on = n === R, star = n === D, ri = rot.list.indexOf(n), off = (mode === "rotation" && LEGACY.has(n)) || (mode === "tune" && !TUNE[n]);
-      return `<button type="button" class="tile${n === loadingTile ? " loading" : ""}" data-n="${esc(n)}" aria-pressed="${on}"${n === loadingTile ? ' aria-busy="true"' : ""}${off ? " disabled" : ""}>${mode === "rotation" && ri >= 0 ? `<span class="order">${ri + 1}</span>` : ""}<div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
+      return `<button type="button" class="tile${n === loadingTile ? " loading" : ""}${mode === "rotation" && ri >= 0 ? " has-order" : ""}" data-n="${esc(n)}" aria-pressed="${on}"${n === loadingTile ? ' aria-busy="true"' : ""}${off ? " disabled" : ""}>${mode === "rotation" && ri >= 0 ? `<span class="order">${ri + 1}</span>` : ""}<div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
     }).join("")}</div></section>`).join("");
   }
 
+  let noteTimer = null;
   function note(text, kind, action) {
     const m = $("msg");
+    clearTimeout(noteTimer);
     if (!text) { m.hidden = true; return; }
     m.hidden = false; m.className = "msg" + (kind === "bad" ? " bad" : "");
     m.innerHTML = `<span>${esc(text)}</span>`;
-    if (action) { const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = action[0]; b.onclick = action[1]; m.appendChild(b); }
+    if (action) { const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = action[0]; b.onclick = () => { note(""); action[1](); }; m.appendChild(b); }
+    const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.setAttribute("aria-label", "Dismiss"); x.textContent = "×"; x.onclick = () => note(""); m.appendChild(x);
+    if (kind !== "bad" && !action) noteTimer = setTimeout(() => note(""), 4500);
   }
   function failNote(e, retry) {
     const c = e && e.code;
@@ -444,8 +498,8 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
       if (!p) { const t = textOf(r); try { p = JSON.parse(t); } catch (e) { p = null; } }
       if (!p) throw { code: "upstream_error" };
       const B = p.board || {};
-      S = { online: !!p.online, programs: (B.programs || []).slice().sort((a, b) => info(a)[0].localeCompare(info(b)[0])), running: B.running || null, def: B.default || null, brightness: B.brightness, sample: false };
-      if (!S.online) note("Can't reach the board. Is it plugged in and on the same Wi-Fi? Check the address you gave serve.py.", "bad", ["Try again", refresh]); else if (!busy) note("");
+      S = { online: !!p.online, programs: (B.programs || []).slice().sort(byCat), running: B.running || null, def: B.default || null, brightness: B.brightness, sample: false };
+      if (!S.online) note("Can't reach the board. Is it plugged in and on the same Wi-Fi? Check the address you gave serve.py.", "bad", ["Try again", refresh]); else if (!busy && $("msg").classList.contains("bad")) note("");
       render();
     } catch (e) { failNote(e, refresh); }
   }
@@ -482,10 +536,16 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
     clearTimeout(bt); bt = setTimeout(() => act("set_brightness", { value: v / 100 }, () => { S.brightness = v / 100; }, $("brightOut")), 350);
   });
   function setMode(m) {
-    mode = m; $("hint").textContent = HINTS[m];
+    mode = m;
+    $("hint").innerHTML = "<span>" + esc(HINTS[m]) + "</span>" + (m !== "play" ? '<button type="button" class="btn" id="modeDone" style="min-height:30px;padding:3px 12px;flex:none">Done</button>' : "");
+    $("sel").classList.toggle("alt", m !== "play");
     document.querySelectorAll("#modeGroup button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+    if (m === "rotation") fold("rotFold", true, false);
     render();
   }
+  $("sel").addEventListener("click", e => { if (e.target.closest("#modeDone")) setMode("play"); });
+  $("jump").addEventListener("click", e => { const b = e.target.closest("[data-jump]"); if (b) document.getElementById("g-" + b.dataset.jump).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); });
+  for (const id of ["rotFold", "mqFold"]) { $(id).addEventListener("click", () => fold(id, $(id).getAttribute("aria-expanded") !== "true")); if (store.get("fold:" + id) === "1") fold(id, true, false); }
   document.getElementById("modeGroup").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
   $("rotChips").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (!b) return; rot.list = rot.list.filter(n => n !== b.dataset.rm); render(); });
   // drag to reorder: pointer events, so it works with a finger as well as a mouse
@@ -536,12 +596,13 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
     const run = a.dataset.apply === "1", n = tune.name;
     act("upload_program", { name: n, code: src, run, make_default: false }, () => { if (tune && tune.name === n) tune.src = src; if (run) S.running = n; note((run ? "Playing " : "Saved ") + info(n)[0] + " with your settings."); }, a);
   });
-  $("tuneBtn").onclick = () => { if (S.running && TUNE[S.running]) openTune(S.running, $("tuneBtn")); else note("Switch to Settings below and tap a program to change it."); };
+  $("tuneBtn").onclick = () => { if (S.running && TUNE[S.running]) openTune(S.running, $("tuneBtn")); };
   $("mqGo").onclick = sendMarquee;
   $("mqText").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendMarquee(); } });
   $("mqStyle").addEventListener("click", e => { const b = e.target.closest("[data-st]"); if (b) { mq.style = +b.dataset.st; renderMq(); } });
   $("mqSpeed").addEventListener("input", e => { mq.speed = +e.target.value; $("mqSpeedOut").textContent = mq.speed; });
-  $("hint").textContent = HINTS.play;
+  $("mqText").addEventListener("input", () => { if ($("mqFold").getAttribute("aria-expanded") !== "true") renderMq(); });
+  setMode("play");
 
   render();
   (async () => {
