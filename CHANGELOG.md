@@ -5,6 +5,13 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Kaleidoscope and Mirror Life (2026-11-01)
+
+- **`kaleidoscope.py`**: pieces of coloured glass tumble in a slowly turning tube, folded by eight mirrors (or four) into a symmetric picture, stained-glass style with dark seams and pieces that glow towards their middles. Every so often the tube is shaken into a new picture. A = shake, B = eight or four mirrors.
+- **`mirrorlife.py`**: the Game of Life runs on the left half and is reflected onto the right, from random soups or small seeds by the middle that bloom outwards. Settings can tint the right half differently or have it lag a few generations behind, so the mirror visibly catches up. A = new round, B = pause.
+- Both are in the Unicorn Remote with Settings.
+- Unicorn Remote: spinners while anything loads (program tiles, Stop, brightness, Settings, Marquee, the connection and rotation status), and buttons are disabled until their command finishes.
+
 ## World, and a moon for Fireflies (2026-11-01)
 
 - **`world.py`**: a meadow under the real sky over Marina del Rey (set `LAT`/`LON` for elsewhere). The sun and moon are placed from the board's clock with standard low-precision formulas (about a degree), so they rise, cross and set on time; the moon shows its real phase; the sky glows at dawn and dusk. Weather comes from Open-Meteo over plain HTTP every 15 minutes (each fetch pauses the animation for about a third of a second): clear, cloudy, fog, rain, snow or thunderstorm, eased in gradually. By day butterflies, a hopping bunny and passing birds; at night stars and fireflies. A = fast-forward through a day. Settings: weather (live or fixed), fast time, critter counts, report interval.
