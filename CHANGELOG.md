@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Remote categories (2026-11-01)
+
+- The Unicorn Remote groups programs by theme instead of Calm / Lively / Games: Outdoors, Space, Ambient, Neon, Physics, Life, Games, Music and Classics (artifact and `local/`).
+
 ## Flying saucer (2026-11-01)
 
 - `spaceship.py`: a classic flying saucer (glass dome, silver hull, rim lights chasing round) visits every 25 to 70 seconds. It glides in from either side, hovers with a wobble, often shines a shimmering tractor beam down, then zips off up or down and away. The ship steers clear of it and its beam. C = call the saucer now. New Settings: how often, speed, hover time, beam chance.
