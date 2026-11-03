@@ -467,6 +467,7 @@ button,.tile,.chip,input[type=range]{touch-action:manipulation}
   }
   function failNote(e, retry) {
     const c = e && e.code;
+    if (c === "signin") { note("Your sign-in ran out. Opening the sign-in page…"); return; }
     if (c === "network") { note(navigator.onLine === false ? "You're offline." : "Couldn't reach the Unicorn cloud.", "bad", ["Try again", retry]); return; }
     if (c === "app_gone") { note("This app's address no longer works. Was the Worker redeployed with a new secret?", "bad"); return; }
     if (c === "server_not_connected") note("The stellar1 connector isn't connected. Add it in claude.ai Settings → Connectors.", "bad");
@@ -478,13 +479,17 @@ button,.tile,.chip,input[type=range]{touch-action:manipulation}
   }
   const textOf = r => { if (!r) return ""; if (typeof r.payload === "string") return r.payload; const t = (r.content || []).find(x => x.type === "text"); return t ? t.text : ""; };
 
+  let reauthing = false;
+  function reauth() { if (reauthing) return; reauthing = true; setTimeout(() => location.reload(), 900); }
   // App version: ask the Worker that serves this page (same secret address) to run the tool.
   async function call(tool, input) {
     let r;
     try {
       r = await fetch("api", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
-        body: JSON.stringify({ tool, args: input || {} }) });
+        redirect: "manual", body: JSON.stringify({ tool, args: input || {} }) });
     } catch (e) { throw { code: "network" }; }
+    // Cloudflare Access in front and the sign-in ran out: reload so it can ask again
+    if (r.type === "opaqueredirect" || r.status === 401 || r.status === 403) { reauth(); throw { code: "signin" }; }
     if (r.status === 404) throw { code: "app_gone" };
     if (!r.ok) throw { code: "upstream_error" };
     const out = await r.json();

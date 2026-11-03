@@ -48,13 +48,17 @@ CALL_OLD = """  async function call(tool, input) {
     if (!mcp) throw { code: "capability_disabled" };
     return mcp.callTool(SERVER, tool, input || {}, { cache: false });
   }"""
-CALL_NEW = """  // App version: ask the Worker that serves this page (same secret address) to run the tool.
+CALL_NEW = """  let reauthing = false;
+  function reauth() { if (reauthing) return; reauthing = true; setTimeout(() => location.reload(), 900); }
+  // App version: ask the Worker that serves this page (same secret address) to run the tool.
   async function call(tool, input) {
     let r;
     try {
       r = await fetch("api", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
-        body: JSON.stringify({ tool, args: input || {} }) });
+        redirect: "manual", body: JSON.stringify({ tool, args: input || {} }) });
     } catch (e) { throw { code: "network" }; }
+    // Cloudflare Access in front and the sign-in ran out: reload so it can ask again
+    if (r.type === "opaqueredirect" || r.status === 401 || r.status === 403) { reauth(); throw { code: "signin" }; }
     if (r.status === 404) throw { code: "app_gone" };
     if (!r.ok) throw { code: "upstream_error" };
     const out = await r.json();
@@ -64,7 +68,8 @@ CALL_NEW = """  // App version: ask the Worker that serves this page (same secre
   }"""
 
 FAIL_OLD = """    if (c === "server_not_connected") note("""
-FAIL_NEW = """    if (c === "network") { note(navigator.onLine === false ? "You're offline." : "Couldn't reach the Unicorn cloud.", "bad", ["Try again", retry]); return; }
+FAIL_NEW = """    if (c === "signin") { note("Your sign-in ran out. Opening the sign-in page…"); return; }
+    if (c === "network") { note(navigator.onLine === false ? "You're offline." : "Couldn't reach the Unicorn cloud.", "bad", ["Try again", retry]); return; }
     if (c === "app_gone") { note("This app's address no longer works. Was the Worker redeployed with a new secret?", "bad"); return; }
     if (c === "server_not_connected") note("""
 
