@@ -20,7 +20,7 @@ OUT_DIR = os.path.join(ROOT, "cloud", "src", "app")
 
 HEAD = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Unicorn Remote</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -35,9 +35,10 @@ HEAD = """<!doctype html>
 <link rel="icon" type="image/png" href="icon-180.png">
 """
 
-# app-only styles: no tap flash, no rubber-band zoom on double tap, notch-safe edges
+# app-only styles: no tap flash, no zooming, notch-safe edges
 APP_CSS = """
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;touch-action:pan-x pan-y}
+input,select,textarea{font-size:16px!important}
 body{margin:0;-webkit-tap-highlight-color:transparent;padding-top:max(20px,env(safe-area-inset-top,0px));padding-bottom:max(40px,calc(env(safe-area-inset-bottom,0px) + 72px))}
 button,.tile,.chip,input[type=range]{touch-action:manipulation}
 [hidden]{display:none!important}
@@ -71,7 +72,9 @@ INIT_OLD = """    const Cl = window.claude;
     try { mcp = Cl && Cl.use ? await Cl.use("mcp") : null; } catch (e) { mcp = null; }
     if (!mcp) { $("connText").textContent = "Open this in Claude to control the board"; note("This remote works inside claude.ai with the stellar1 connector.", "bad"); return; }
     await refresh();"""
-INIT_NEW = """    await refresh();"""
+INIT_NEW = """    // a home-screen app shouldn't pinch-zoom
+    for (const ev of ["gesturestart", "gesturechange"]) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+    await refresh();"""
 
 # a queued command on an offline board is reported by the Worker as an error; say it kindly
 TOOLERR_OLD = """    else if (c === "tool_error") note("The board said: " + String(e.message || "error").slice(0, 200), "bad");"""

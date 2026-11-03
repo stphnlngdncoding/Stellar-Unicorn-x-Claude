@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Unicorn Remote</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -151,7 +151,8 @@ output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
 @media (prefers-reduced-motion:reduce){.spin,.btn.loading::after,.tile.loading::after,output.loading::after{animation-duration:2.4s}}
 .toggle{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center}
 @media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px;min-height:56px}.tile .td{display:none}.now{gap:12px;padding:14px}.now .big{width:64px;height:64px;align-self:start}.wrap{gap:18px}}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;touch-action:pan-x pan-y}
+input,select,textarea{font-size:16px!important}
 body{margin:0;-webkit-tap-highlight-color:transparent;padding-top:max(20px,env(safe-area-inset-top,0px));padding-bottom:max(40px,calc(env(safe-area-inset-bottom,0px) + 72px))}
 button,.tile,.chip,input[type=range]{touch-action:manipulation}
 [hidden]{display:none!important}
@@ -606,6 +607,8 @@ button,.tile,.chip,input[type=range]{touch-action:manipulation}
 
   render();
   (async () => {
+    // a home-screen app shouldn't pinch-zoom
+    for (const ev of ["gesturestart", "gesturechange"]) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
     await refresh();
     loadRot();
     loadMarquee();
