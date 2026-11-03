@@ -44,6 +44,8 @@ After setup the board only needs USB power. Prefer to do it by hand? See [manual
 
 The Worker also serves the Unicorn Remote as a phone app. Its address is your connector URL with `/mcp/` changed to `/app/` (and a `/` on the end); `bash cloud/deploy-app.sh` updates the Worker and prints it. Open it in Safari, tap Share, then *Add to Home Screen*: it opens full screen like an app and works anywhere, Wi-Fi or cellular. Keep the address private, like the connector URL.
 
+To have the Worker update itself, connect it to your copy of this repo in the Cloudflare dashboard (Workers & Pages → your Worker → Settings → Build → Connect, root directory `cloud`): every push to `main` then redeploys it, keeping its secrets.
+
 ### No Cloudflare? Run it locally
 
 [`local/`](local/README.md) is an alternative that needs only Python: a local MCP server for Claude Desktop or Claude Code, and the Unicorn Remote as a page on `localhost`. Both talk to the board directly over your Wi-Fi, so they only work at home, and not from your phone or claude.ai on the web.

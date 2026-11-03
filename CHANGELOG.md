@@ -11,6 +11,8 @@ See "Versions and rolling back" in the README.
 - The app uses the same tools as the connector minus `delete_program`. A command sent while the board is offline says it's queued and will run when the board checks back in.
 - `remote/build_app.py` builds the app page and icons from the artifact Remote; `cloud/deploy-app.sh` redeploys the Worker (secrets untouched) and prints the app's address. `setup.sh` prints it too.
 - Needs a Worker redeploy (`bash cloud/deploy-app.sh`); no board changes.
+- The phone app doesn't zoom (no pinch or double-tap zoom, and no zooming in when you tap a text box).
+- The Worker can deploy itself from GitHub: connect it under Settings → Build with root directory `cloud`, and every push to `main` redeploys it.
 
 ## Remote UX pass (2026-11-01)
 
