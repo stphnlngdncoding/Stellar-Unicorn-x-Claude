@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.2.4 / v6.1.3: full brightness at start-up (2026-11-03)
+
+- The board starts at full brightness instead of 50%. The brightness buttons, the Remote and Claude can still dim it until the next restart.
+- `board/main.py` is v6.2.4; boards on v6.1.2 upgrade over the air with `board/upgrades/install_v613.py`.
+
 ## Unicorn Remote on your iPhone (2026-11-03)
 
 - **The Worker serves the Remote as a phone web app** at `/app/<MCP_SECRET>/`: your connector URL with `/mcp/` changed to `/app/`. Add it to the iPhone home screen from Safari and it opens full screen with its own icon, and works from anywhere because it goes through the same command queue as Claude. No new secret; the page sends no referrer and isn't indexed.

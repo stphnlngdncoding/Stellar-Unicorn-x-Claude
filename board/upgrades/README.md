@@ -11,5 +11,6 @@ for, it changes nothing and shows a red cross.
 |---|---|---|
 | `install_v611.py` | 6.1 → 6.1.1 | One cloud connection per command instead of two, and a loading spinner while it connects, so newly started programs don't stutter. Backup: `main_v61.py`. |
 | `install_v612.py` | 6.1.1 → 6.1.2 | Blinks an orange border every 45 seconds when free storage drops below 200 KB. Backup: `main_v611.py`. |
+| `install_v613.py` | 6.1.2 → 6.1.3 | Starts the board at full brightness instead of half. Backup: `main_v612.py`. |
 
 To roll back, rename the backup to `main.py` in Thonny.

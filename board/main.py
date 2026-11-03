@@ -37,7 +37,7 @@
 
 import os, sys, time, gc, json, math, machine, micropython
 
-VERSION = "6.2.3"
+VERSION = "6.2.4"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
 LOW_FLASH_KB = 200              # blink a warning border when free storage drops below this
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
@@ -165,7 +165,7 @@ def launcher():
 
     su = StellarUnicorn()
     g = PicoGraphics(DISPLAY)
-    su.set_brightness(0.5)
+    su.set_brightness(1.0)      # start at full brightness
     W = StellarUnicorn.WIDTH
 
     st = {
