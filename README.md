@@ -40,6 +40,10 @@ The board can't be reached from the internet, so it keeps a connection open to a
 
 After setup the board only needs USB power. Prefer to do it by hand? See [manual setup](GUIDE.md#manual-setup). Launcher updates can be installed over the air; see [`board/upgrades/`](board/upgrades/README.md).
 
+### The Remote on your iPhone
+
+The Worker also serves the Unicorn Remote as a phone app. Its address is your connector URL with `/mcp/` changed to `/app/` (and a `/` on the end); `bash cloud/deploy-app.sh` updates the Worker and prints it. Open it in Safari, tap Share, then *Add to Home Screen*: it opens full screen like an app and works anywhere, Wi-Fi or cellular. Keep the address private, like the connector URL.
+
 ### No Cloudflare? Run it locally
 
 [`local/`](local/README.md) is an alternative that needs only Python: a local MCP server for Claude Desktop or Claude Code, and the Unicorn Remote as a page on `localhost`. Both talk to the board directly over your Wi-Fi, so they only work at home, and not from your phone or claude.ai on the web.

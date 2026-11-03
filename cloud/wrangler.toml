@@ -9,3 +9,9 @@ class_name = "Board"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Board"]
+
+# the phone app's page is bundled as text (see remote/build_app.py)
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true

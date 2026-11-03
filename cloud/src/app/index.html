@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Unicorn Remote</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Unicorn">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef0f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0d12" media="(prefers-color-scheme: dark)">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a "now playing" panel up top (status, brightness, stop), then the program library as a grid of LED tiles grouped by mood. Tap a tile to play it. */
+:root{
+  --bg:#eef0f5; --panel:#ffffff; --raise:#f5f6fa; --ink:#161925; --muted:#5d6377; --line:#d9dce6;
+  --accent:#5b3df5; --on-accent:#ffffff; --live:#12a37a; --warn:#c2410c; --bad:#c62f4b; --led-off:#22252f;
+  --display:"Pixelify Sans","Courier New",monospace;
+  --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c0d12; --panel:#15171f; --raise:#1c1f2a; --ink:#ecedf4; --muted:#9499ad; --line:#2a2d3a;
+  --accent:#8f7bff; --on-accent:#0c0d12; --live:#3ddbab; --warn:#fb923c; --bad:#ff6b85; --led-off:#1b1d26; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c0d12; --panel:#15171f; --raise:#1c1f2a; --ink:#ecedf4; --muted:#9499ad; --line:#2a2d3a;
+  --accent:#8f7bff; --on-accent:#0c0d12; --live:#3ddbab; --warn:#fb923c; --bad:#ff6b85; --led-off:#1b1d26; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1{font-family:var(--display);font-weight:700;font-size:1.9rem;margin:0;letter-spacing:.01em;line-height:1}
+h2{font-family:var(--display);font-weight:500;font-size:1.05rem;margin:0;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:1px}
+.dot.on{background:var(--live);box-shadow:0 0 0 3px color-mix(in srgb,var(--live) 25%,transparent)}
+.conn{font-size:.85rem;color:var(--muted)}
+.now{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+.now .big{width:84px;height:84px}
+.nowinfo{display:flex;flex-direction:column;gap:8px;min-width:0}
+.eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.nowname{font-family:var(--display);font-size:1.5rem;font-weight:700;line-height:1.1;overflow-wrap:anywhere}
+.nowsub{font-size:.88rem;color:var(--muted)}
+.ctrls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:1.5px solid var(--line);background:var(--raise);border-radius:10px;padding:8px 14px;min-height:40px;font-weight:600;font-size:.88rem}
+.btn:disabled{opacity:.5;cursor:default}
+.bright{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);flex:1 1 180px}
+.now .bright{flex-basis:100%}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.bright input{flex:1;accent-color:var(--accent);min-width:0}
+.bright output{font-family:var(--mono);font-size:.8rem;width:3.2em;text-align:right;color:var(--ink)}
+.msg{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:20;width:min(728px,calc(100% - 32px));font-size:.9rem;border-radius:12px;padding:10px 10px 10px 14px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.18);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;animation:rise .18s ease-out}
+.msg .x{margin-left:auto}
+@keyframes rise{from{opacity:0;transform:translate(-50%,8px)}}
+@media (prefers-reduced-motion:reduce){.msg{animation:none}}
+.msg.bad{border-color:color-mix(in srgb,var(--bad) 50%,var(--line));color:var(--bad)}
+.group{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.tile{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:center;text-align:left;background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.tile:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.tile[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.tile .tn{font-weight:600;line-height:1.2;overflow-wrap:anywhere}
+.tile .td{font-size:.76rem;color:var(--muted);line-height:1.3;display:block;margin-top:2px}
+.tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.tag{font-size:.64rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:99px;background:var(--raise);color:var(--muted)}
+.tag.star{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.tag.live{background:color-mix(in srgb,var(--live) 18%,transparent);color:var(--live)}
+.led{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;aspect-ratio:1;max-width:100%;background:#07080b;border-radius:7px;padding:4px}
+.led i{border-radius:50%;background:var(--led-off)}
+.big.led{grid-template-columns:repeat(6,1fr);gap:3px;padding:7px;border-radius:12px}
+.tile[aria-pressed="true"] .led i{animation:tw 2.4s ease-in-out infinite}
+@keyframes tw{50%{filter:brightness(.55)}}
+@media (prefers-reduced-motion:reduce){.tile[aria-pressed="true"] .led i{animation:none}}
+.menu{display:flex;gap:6px;flex-wrap:wrap}
+.foot{font-size:.8rem;color:var(--muted)}
+.modes{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.modes button{border:0;background:none;padding:6px 12px;min-height:36px;font-size:.85rem;font-weight:600;color:var(--muted)}
+.modes.seg{display:flex;flex-wrap:wrap;gap:6px;border:0;border-radius:0;overflow:visible}
+.modes.seg button{border:1.5px solid var(--line);border-radius:9px;padding:5px 11px}
+.modes.seg button[aria-pressed="true"]{border-color:var(--accent)}
+.foldhead{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:none;border:0;padding:2px 0;text-align:left;min-height:32px}
+.foldhead .sum{font-size:.8rem;color:var(--muted);margin-left:auto;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.chev{flex:none;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .15s}
+.fold[aria-expanded="true"] .chev{transform:rotate(-135deg) translate(-2px,0)}
+.foldbody{display:flex;flex-direction:column;gap:10px}
+.libbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0 8px;margin:-10px 0 -8px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 0 var(--line)}
+.jump{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.jump::-webkit-scrollbar{display:none}
+.jump{-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:24px}
+#hint{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1 1 100%;min-height:30px}
+.jump button{flex:none;border:1.5px solid var(--line);background:var(--panel);border-radius:99px;padding:4px 11px;font-size:.78rem;font-weight:600;color:var(--muted);min-height:30px}
+.group{scroll-margin-top:110px}
+.sel.alt .foot{color:var(--accent);font-weight:600}
+.iconbtn{border:0;background:none;width:36px;height:36px;border-radius:9px;color:var(--muted);display:inline-grid;place-items:center;padding:0}
+.iconbtn:hover{background:var(--raise);color:var(--ink)}
+.iconbtn svg{width:18px;height:18px}
+.iconbtn.loading svg{visibility:hidden}
+.iconbtn.loading::after{left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px}
+.connrow{display:flex;align-items:center;gap:4px}
+.tile.has-order{padding-right:34px}
+.modes button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.rot{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.rothead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.chips{display:flex;flex-direction:column;gap:6px;list-style:none;margin:0;padding:0}
+.chip{display:grid;grid-template-columns:28px 26px minmax(0,1fr) auto;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--raise);border-radius:10px;padding:5px 6px;font-size:.9rem;font-weight:600;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.chip:focus-visible{outline:2px solid var(--accent)}
+.chip.dragging{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--raise));box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:grabbing}
+.chip .grip{color:var(--muted);font-size:1rem;text-align:center;letter-spacing:-2px}
+.chip b{font-family:var(--mono);font-size:.75rem;color:var(--accent);text-align:center}
+.chip .led{width:26px;padding:3px;gap:1px;border-radius:5px}
+.chip button{border:0;background:none;padding:2px 8px;font-size:1.1rem;line-height:1;color:var(--muted);cursor:pointer}
+.chip .cn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rotrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
+.rotrow select{font:inherit;color:var(--ink);background:var(--raise);border:1.5px solid var(--line);border-radius:8px;padding:5px 8px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.order{position:absolute;top:6px;right:8px;font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--on-accent);background:var(--accent);border-radius:99px;min-width:20px;height:20px;display:grid;place-items:center;padding:0 5px}
+.tile:disabled{opacity:.4;cursor:default}
+.sel{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tune{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.knobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px 20px}
+.knob{display:flex;flex-direction:column;gap:4px;min-width:0}
+.kl{font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.kl output{font-family:var(--mono);font-size:.8rem;color:var(--ink);white-space:nowrap}
+.knob input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+.pair{display:flex;flex-direction:column}
+.x{border:0;background:none;font-size:1.3rem;line-height:1;color:var(--muted);padding:2px 8px}
+.seg{align-self:flex-start}
+.mqin{font:inherit;font-size:1rem;width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--raise);color:var(--ink)}
+.mqin:focus{outline:2px solid var(--accent);outline-offset:1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:.85em;height:.85em;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-.1em;margin-right:6px}
+.btn.loading,.tile.loading,.iconbtn.loading{position:relative;pointer-events:none}
+.btn.loading{color:transparent}
+.btn.loading::after,.tile.loading::after,output.loading::after,.iconbtn.loading::after{content:"";position:absolute;border:2px solid color-mix(in srgb,var(--muted) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.btn.loading::after{left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px}
+.btn.pri.loading::after{border-color:color-mix(in srgb,var(--on-accent) 35%,transparent);border-top-color:var(--on-accent)}
+.tile.loading .led{opacity:.25}
+.tile.loading::after{left:21px;top:50%;width:18px;height:18px;margin-top:-9px}
+output.loading{position:relative;color:transparent}
+output.loading::after{right:4px;top:50%;width:12px;height:12px;margin-top:-6px}
+.working,.working *{cursor:progress}
+.mqin:disabled{opacity:.6}
+@media (max-width:420px){.tile.loading::after{left:17px}}
+@media (prefers-reduced-motion:reduce){.spin,.btn.loading::after,.tile.loading::after,output.loading::after{animation-duration:2.4s}}
+.toggle{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center}
+@media (max-width:420px){.grid{grid-template-columns:1fr 1fr}.tile{grid-template-columns:36px minmax(0,1fr);padding:8px;gap:8px;min-height:56px}.tile .td{display:none}.now{gap:12px;padding:14px}.now .big{width:64px;height:64px;align-self:start}.wrap{gap:18px}}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;-webkit-tap-highlight-color:transparent;padding-top:max(20px,env(safe-area-inset-top,0px));padding-bottom:max(40px,calc(env(safe-area-inset-bottom,0px) + 72px))}
+button,.tile,.chip,input[type=range]{touch-action:manipulation}
+[hidden]{display:none!important}
+</style>
+</head><body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Unicorn Remote</h1>
+    <div class="connrow"><span class="conn" id="conn" role="status"><span class="dot" id="dot"></span><span id="connText"><span class="spin" aria-hidden="true"></span>Connecting to the board…</span></span>
+      <button type="button" class="iconbtn" id="refreshBtn" aria-label="Check the board again" title="Check the board again"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></div>
+  </header>
+
+  <section class="now" aria-labelledby="nowLabel">
+    <div class="big led" id="nowLed" aria-hidden="true"></div>
+    <div class="nowinfo">
+      <span class="eyebrow" id="nowLabel">Now playing</span>
+      <span class="nowname" id="nowName">Plasma</span>
+      <span class="nowsub" id="nowSub">Power-on: Plasma</span>
+      <div class="ctrls">
+        <label class="bright" for="bright">Brightness <input type="range" id="bright" min="5" max="100" step="5" value="50"><output id="brightOut">50%</output></label>
+        <div class="btnrow"><button type="button" class="btn" id="stopBtn">Stop</button>
+        <button type="button" class="btn" id="tuneBtn">Settings</button></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="msg" id="msg" role="status" aria-live="polite" hidden></div>
+
+  <section class="tune" id="tune" hidden aria-labelledby="tuneH"></section>
+
+  <section class="rot" aria-labelledby="rotH">
+    <button type="button" class="foldhead fold" id="rotFold" aria-expanded="false" aria-controls="rotBody"><h2 id="rotH">Rotation</h2><span class="sum" id="rotState"><span class="spin" aria-hidden="true"></span>Loading…</span><span class="chev" aria-hidden="true"></span></button>
+    <div class="foldbody" id="rotBody" hidden>
+    <ol class="chips" id="rotChips" aria-label="Rotation order. Drag to reorder, or focus one and use the arrow keys."></ol>
+    <div class="rotrow">
+      <label for="rotEvery">Switch every</label>
+      <select id="rotEvery"><option value="60">1 minute</option><option value="300">5 minutes</option><option value="600" selected>10 minutes</option><option value="900">15 minutes</option><option value="1800">30 minutes</option><option value="3600">1 hour</option></select>
+      <label class="toggle" for="rotDefault"><input type="checkbox" id="rotDefault"> Also play at power-on</label>
+      <button type="button" class="btn pri" id="rotStart">Start rotation</button>
+    </div>
+    </div>
+  </section>
+
+  <section class="rot" aria-labelledby="mqH">
+    <button type="button" class="foldhead fold" id="mqFold" aria-expanded="false" aria-controls="mqBody"><h2 id="mqH">Marquee</h2><span class="sum" id="mqState"></span><span class="chev" aria-hidden="true"></span></button>
+    <div class="foldbody" id="mqBody" hidden>
+    <input type="text" id="mqText" class="mqin" maxlength="160" placeholder="Type a message to scroll across the board" autocomplete="off" enterkeyhint="send" aria-label="Marquee message">
+    <div class="rotrow">
+      <div class="modes" id="mqStyle" role="group" aria-label="Marquee colours"><button type="button" data-st="0" aria-pressed="true">Rainbow</button><button type="button" data-st="4" aria-pressed="false">Neon</button><button type="button" data-st="2" aria-pressed="false">Warm</button><button type="button" data-st="3" aria-pressed="false">Cool</button><button type="button" data-st="1" aria-pressed="false">White</button></div>
+      <label class="bright" for="mqSpeed">Speed <input type="range" id="mqSpeed" min="4" max="40" step="1" value="12"><output id="mqSpeedOut">12</output></label>
+      <button type="button" class="btn pri" id="mqGo">Show on board</button>
+    </div>
+    </div>
+  </section>
+
+  <div class="libbar">
+    <div class="sel" id="sel">
+      <div class="modes" id="modeGroup" role="group" aria-label="What tapping a program does">
+        <button type="button" data-mode="play" aria-pressed="true">Play</button>
+        <button type="button" data-mode="default" aria-pressed="false">Power-on</button>
+        <button type="button" data-mode="rotation" aria-pressed="false">Rotation</button>
+        <button type="button" data-mode="tune" aria-pressed="false">Settings</button>
+      </div>
+      <span class="foot" id="hint" aria-live="polite"></span>
+    </div>
+    <nav class="jump" id="jump" aria-label="Jump to a group"></nav>
+  </div>
+
+  <div id="library" style="display:flex;flex-direction:column;gap:22px"></div>
+
+  <p class="foot">Classic Pimoroni programs restart the board while they play. Press the board's sleep button to come back to the remote.</p>
+</div>
+
+<script>
+(() => {
+  const SERVER = "stellar1";
+  // What we know about each program we've made: name, what it does, its colours, its group.
+  const CAT = {
+    "world.py":         ["World", "Your real sky: sun, moon, weather, day and night", ["#2870e1","#ffd860","#32963c","#0a0e22"], "Outdoors"],
+    "fireflies.py":     ["Fireflies", "Fireflies glimmer under the real moon", ["#d2ff3c","#9fe646","#0a1440","#ffe14b"], "Outdoors"],
+    "garden.py":        ["Garden", "Plants that sprout, bloom and reseed", ["#3ddc84","#ff6fae","#ffd166","#5b3a1a"], "Outdoors"],
+    "antfarm.py":       ["Ant farm", "Ants dig tunnels and feed their queen", ["#be8c46","#ff190a","#ff46aa","#78ff28"], "Outdoors"],
+    "boat.py":          ["Boat", "A sailboat tossed by waves, in sunshine and storms", ["#2a8ae6","#aa4b1e","#faf8eb","#3e5262"], "Outdoors"],
+    "spaceship.py":     ["Spaceship", "A little ship dodging asteroids past suns and planets", ["#dc2832","#3cdcff","#ff8c1e","#d7aa6e"], "Space"],
+    "starfall.py":      ["Starfall", "Shooting stars, fireballs and meteor showers", ["#c8e1ff","#ffcd6e","#0a0c2a","#dcbeff"], "Space"],
+    "warp.py":          ["Warp", "Stars streaking past at warp speed", ["#ffffff","#9fd3ff","#3d5aff","#0a0f2e"], "Space"],
+    "kaleidoscope.py":  ["Kaleidoscope", "Tumbling glass folded by eight mirrors", ["#ff3d8b","#3dd9ff","#ffd23d","#7a3dff"], "Ambient"],
+    "plasma.py":        ["Plasma", "Rainbow sine waves rippling across the board", ["#ff3d6e","#ffb02e","#3ddc84","#3d7bff"], "Ambient"],
+    "lava_lamp.py":     ["Lava lamp", "Warm blobs rising and falling", ["#ff4b1f","#ff9a1f","#7a0f2a","#ffd166"], "Ambient"],
+    "goo.py":           ["Goo", "Slow glowing blobs that merge and split", ["#3df5c4","#1a9e8f","#0b3a4a","#9effe0"], "Ambient"],
+    "tides.py":         ["Tides", "Liquid waves in jewel tones", ["#1e1460","#0a6e8c","#d2a028","#c83c5a"], "Ambient"],
+    "drift.py":         ["Drift", "Glowing motes with fading trails", ["#3ab5b0","#5aa0d8","#8c78c8","#123"], "Ambient"],
+    "fractal.py":       ["Fractal", "A slowly evolving fractal in muted colours", ["#7d6b91","#a3b18a","#588b8b","#c8b6a6"], "Ambient"],
+    "tunnel.py":        ["Tunnel", "Drive through a twisting neon tunnel", ["#ff2e88","#2ef2ff","#6a2eff","#ffd02e"], "Neon"],
+    "morph.py":         ["Morph", "Kaleidoscope that melts between shapes", ["#ff3df0","#3dfff2","#ffe53d","#3d3dff"], "Neon"],
+    "rainbow.py":       ["Rainbow", "Rainbow effects, three modes on A/B/C", ["#ff3d3d","#ffd23d","#3dff7a","#3d8bff"], "Neon"],
+    "marquee.py":       ["Marquee", "Your message, scrolling and bouncing", ["#ff3df0","#3dfff2","#ffe53d","#ff7a3d"], "Neon"],
+    "sand.py":          ["Sand", "Coloured sand piling up in layers", ["#ecd6aa", "#c47850", "#aac8dc", "#96b9a0"], "Physics"],
+    "waterjet.py":      ["Water jet", "Pale blue and green spurts that scatter and bounce", ["#96b9ff", "#6eebe1", "#87f0be", "#a5aaff"], "Physics"],
+    "mercury.py":       ["Liquid metal", "Sloshing three-tone metal with splashes", ["#3d7bff","#c8e6ff","#8f3dff","#0a1440"], "Physics"],
+    "slowlife.py":      ["Slow Life", "Mirror Life at a crawl, glowing in and fading out", ["#ff2d96","#8232ff","#00d2ff","#2a1a4a"], "Life"],
+    "mirrorlife.py":    ["Mirror Life", "Life on one half, reflected onto the other", ["#3dff9e","#ff6a3d","#3d6aff","#ffffff"], "Life"],
+    "life2.py":         ["Life v2", "Still lifes that shatter, then spaceship fleets", ["#ff3df0","#3dfff2","#ffe53d","#3d8bff"], "Life"],
+    "life.py":          ["Game of Life", "Cells that live, die and change colour", ["#ffffff","#7af0ff","#ff7ad9","#c8ff7a"], "Life"],
+    "maze.py":          ["Hedge Maze", "A firefly collects dew while spiders hunt it", ["#d2ff5a","#16602a","#aa3ce6","#ff46a0"], "Games"],
+    "tetris.py":        ["Tetris", "Plays itself; A drops, B speeds up", ["#3cdcff", "#ffdc28", "#be50ff", "#ff963c"], "Games"],
+    "snake.py":         ["Snake", "Plays itself; A and B steer", ["#ff3d6e","#3dff9e","#ffe53d","#ff283c"], "Games"],
+    "adventure.py":     ["Adventure", "An 8-bit theme song with a title card", ["#ffb02e","#ff5d3d","#fff3c4","#3d7bff"], "Music"],
+    "fire.py":          ["Fire", "Pimoroni classic: flickering flames", ["#ff2a00","#ff8a00","#ffd000","#3a0a00"], "Classics"],
+    "supercomputer.py": ["Supercomputer", "Pimoroni classic: blinking lights", ["#ff3d3d","#3dff7a","#3d8bff","#ffd23d"], "Classics"],
+    "today.py":         ["Today", "Pimoroni classic: the date", ["#ffffff","#ff3d3d","#9fd3ff","#ffd23d"], "Classics"]
+  };
+  const ORDER = ["Outdoors", "Space", "Ambient", "Neon", "Physics", "Life", "Games", "Music", "Classics", "Other"];
+  const HIDE = n => /^main(_v\d+)?\.py$/.test(n) || /^install_/.test(n) || n === "rotation.py";
+  const ROT = "rotation.py";
+  const ENGINE = "# ---- the rest runs the playlist ----\nimport gc, time\n\ndef _load(name):\n    global cur, cur_name, cur_t0\n    cur, cur_name = None, None\n    gc.collect()\n    try:\n        with open(name) as f:\n            src = f.read()\n        if \"def frame\" not in src:\n            raise ValueError(\"old-style program\")\n        env = {\"__name__\": name[:-3]}\n        if \"local_time\" in globals():\n            env[\"local_time\"] = local_time\n        exec(src, env)\n        del src\n        G.set_font(\"bitmap8\")\n        G.set_pen(G.create_pen(0, 0, 0))\n        G.clear()\n        if \"setup\" in env:\n            env[\"setup\"](SU, G)\n        cur, cur_name = env, name\n    except Exception as e:\n        print(\"rotation: skipping\", name, repr(e))\n        bad.append(name)\n    cur_t0 = None\n\ndef _pick():\n    items = [n for n in PLAYLIST if n not in bad]\n    if not items:\n        return None\n    return items[int(time.time() // max(10, SECONDS)) % len(items)]\n\ndef setup(su, g):\n    global SU, G, bad, cur, cur_name, cur_t0\n    SU, G = su, g\n    bad, cur, cur_name, cur_t0 = [], None, None, None\n\ndef frame(su, g, t):\n    global cur_t0, cur\n    want = _pick()\n    if want is None:\n        g.set_pen(g.create_pen(0, 0, 0))\n        g.clear()\n        return 0.5\n    if want != cur_name:\n        _load(want)\n        if cur is None:\n            return 0.05\n    if cur_t0 is None:\n        cur_t0 = t\n    try:\n        return cur[\"frame\"](su, g, t - cur_t0)\n    except Exception as e:\n        print(\"rotation: error in\", cur_name, repr(e))\n        bad.append(cur_name)\n        cur = None\n        return 0.05\n";
+  let mode = "play", rot = { list: [], secs: 600, loaded: false };
+  const HINTS = { play: "Tap a program to play it.", default: "Tap the program to play at power-on.", rotation: "Tap programs to add or remove them from the rotation.", tune: "Tap a program to change its settings." };
+  // folding cards: remembered per viewer, best effort
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+  function fold(id, open, keep) {
+    const b = document.getElementById(id), body = document.getElementById(b.getAttribute("aria-controls"));
+    b.setAttribute("aria-expanded", open); body.hidden = !open;
+    if (keep !== false) store.set("fold:" + id, open ? "1" : "0");
+  }
+  const RANK = Object.fromEntries(Object.keys(CAT).map((n, i) => [n, i]));
+  const byCat = (a, b) => (RANK[a] ?? 999) - (RANK[b] ?? 999) || info(a)[0].localeCompare(info(b)[0]);
+  const LEGACY = new Set(["fire.py", "supercomputer.py", "today.py"]);
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // Until the board answers, show the library we know about so the page isn't empty.
+  let S = { online: null, programs: Object.keys(CAT).concat([]), running: null, def: null, brightness: 0.5, sample: true };
+  let mcp = null, busy = false, loadingTile = null;
+  const SPIN = '<span class="spin" aria-hidden="true"></span>';
+  // show that something is working: a spinner on the button (or tile, or readout) until it's done
+  function setLoading(el, on) {
+    if (!el) return;
+    el.classList.toggle("loading", on);
+    el.setAttribute("aria-busy", on ? "true" : "false");
+    if (el.tagName === "BUTTON") el.disabled = on;
+  }
+
+  const info = n => CAT[n] || [n.replace(/\.py$/, "").replace(/[_-]+/g, " ").replace(/^./, c => c.toUpperCase()), "", hashCols(n), "Other"];
+  function hashCols(n) {
+    let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return [0, 1, 2, 3].map(i => `hsl(${(h + i * 67) % 360} 85% ${50 + (i % 2) * 15}%)`);
+  }
+  function led(cols, n) {
+    let s = ""; for (let i = 0; i < n * n; i++) { const x = i % n, y = (i / n) | 0, k = (x * 3 + y * 5 + ((x * y) % 3)) % 6; s += k < 4 ? `<i style="background:${cols[k]}"></i>` : "<i></i>"; }
+    return s;
+  }
+
+
+  // Settings: each program's adjustable constants, with safe slider ranges
+  // (tested at both ends). d = the value it ships with.
+  const TUNE = {"antfarm.py":[{"k":"TICK","l":"Seconds per ant step","min":0.05,"max":0.8,"step":0.05,"d":0.3},{"k":"START_ANTS","l":"Ants at the start","min":1,"max":10,"step":1,"d":4},{"k":"MAX_ANTS","l":"Most ants","min":2,"max":20,"step":1,"d":12},{"k":"DIG_CHANCE","l":"Digging eagerness","min":0.02,"max":0.6,"step":0.02,"d":0.22},{"k":"FOOD_S","l":"Seconds between food","min":2,"max":60,"step":1,"d":[8,20]},{"k":"HATCH_S","l":"Seconds to hatch","min":5,"max":90,"step":5,"d":25},{"k":"FULL","l":"Dug cells before a fresh farm","min":30,"max":150,"step":5,"d":90}],"drift.py":[{"k":"MOTES","l":"Motes","min":4,"max":30,"step":1,"d":14},{"k":"STEP","l":"Speed","min":5,"max":80,"step":1,"d":26},{"k":"DEPOSIT","l":"Glow","min":10,"max":120,"step":2,"d":46},{"k":"FADE","l":"Trail length","min":40,"max":63,"step":1,"d":60},{"k":"PALETTE_SECONDS","l":"Seconds per palette","min":15,"max":300,"step":15,"d":90}],"fireflies.py":[{"k":"PACE","l":"Speed (lowest = a rare surprise)","min":0.01,"max":2,"step":0.01,"d":1},{"k":"COUNT","l":"Fireflies","min":4,"max":30,"step":1,"d":16},{"k":"DARK","l":"Frames dark between lights","min":10,"max":600,"step":10,"d":[70,280]},{"k":"LIT_S","l":"Seconds lit","min":1,"max":15,"step":0.5,"d":[3,6]},{"k":"LIT_SPEED","l":"Speed while lit","min":0,"max":1000,"step":10,"d":380},{"k":"WAVE_S","l":"Seconds between waves","min":10,"max":200,"step":5,"d":[40,90]},{"k":"MOON","l":"Moon","opts":["Off","On"],"d":1}],"fractal.py":[{"k":"MORPH_SPEED","l":"Morph speed","min":0.005,"max":0.2,"step":0.005,"d":0.045},{"k":"SPIN_SPEED","l":"Spin speed","min":0,"max":0.15,"step":0.005,"d":0.03},{"k":"ZOOM","l":"Zoom out","min":0.5,"max":2.5,"step":0.1,"d":1.2},{"k":"CONTRAST","l":"Contrast","min":0.5,"max":3,"step":0.1,"d":1.6},{"k":"MAX_ITER","l":"Detail","min":8,"max":48,"step":1,"d":24}],"garden.py":[{"k":"MAX_PLANTS","l":"Most plants","min":2,"max":16,"step":1,"d":10},{"k":"GROW","l":"Seconds to grow","min":4,"max":60,"step":1,"d":[14,30]},{"k":"BLOOM","l":"Seconds in bloom","min":10,"max":200,"step":5,"d":[40,90]},{"k":"WILT","l":"Seconds to wilt","min":1,"max":20,"step":1,"d":6},{"k":"SEED_EVERY","l":"Seconds between seeds","min":2,"max":60,"step":1,"d":[8,20]}],"goo.py":[{"k":"BLOBS","l":"Blobs","min":2,"max":9,"step":1,"d":5},{"k":"DRIFT","l":"Drift speed","min":0.005,"max":0.15,"step":0.005,"d":0.045},{"k":"SWELL","l":"Swell speed","min":0.01,"max":0.3,"step":0.01,"d":0.11},{"k":"COLOUR_MINUTES","l":"Minutes per colour cycle","min":1,"max":20,"step":1,"d":4},{"k":"EDGE","l":"Black space","min":120,"max":500,"step":10,"d":260}],"lava_lamp.py":[{"k":"BLOB_COUNT","l":"Blobs","min":1,"max":10,"step":1,"d":5},{"k":"HUE_STEP","l":"Colour cycle speed","min":0,"max":0.01,"step":0.0005,"d":0.001}],"life.py":[{"k":"COLOR_STYLE","l":"Colours","opts":["Families","Rainbow","Age"],"d":0},{"k":"STEP_SECONDS","l":"Seconds per generation","min":0.05,"max":1.5,"step":0.05,"d":0.3},{"k":"FADE","l":"Fade speed","min":10,"max":255,"step":5,"d":51},{"k":"DENSITY","l":"Starting density","min":0.05,"max":0.7,"step":0.05,"d":0.3},{"k":"TRIBES","l":"Colour families","min":1,"max":10,"step":1,"d":4},{"k":"MUTATION","l":"Colour mutation","min":0,"max":40,"step":1,"d":8},{"k":"HUE_STEP","l":"Palette drift","min":0,"max":20,"step":1,"d":3},{"k":"RIPEN","l":"Generations to ripen","min":1,"max":30,"step":1,"d":8},{"k":"MAX_SATURATION","l":"Saturation","min":0.2,"max":1,"step":0.05,"d":0.85}],"life2.py":[{"k":"STEP_SECONDS","l":"Seconds per generation","min":0.1,"max":2,"step":0.05,"d":0.6},{"k":"CALM_SECONDS","l":"Seconds before the dot","min":2,"max":60,"step":1,"d":10},{"k":"HUE_SPEED","l":"Colour stream speed","min":0,"max":20,"step":1,"d":5},{"k":"AGE_SHIFT","l":"Colour change with age","min":0,"max":64,"step":1,"d":23},{"k":"SHIPS","l":"Spaceships per fleet","min":1,"max":8,"step":1,"d":[3,5]}],"mercury.py":[{"k":"SPEED","l":"Overall speed","min":1,"max":4,"step":1,"d":2},{"k":"LEVEL","l":"Depth","min":1,"max":8,"step":0.5,"d":3.5},{"k":"SLOSH","l":"Rocking speed","min":0.02,"max":0.5,"step":0.02,"d":0.14},{"k":"TILT","l":"Rocking height","min":0,"max":10,"step":0.5,"d":5.5},{"k":"WAIT","l":"Seconds between scoops","min":2,"max":40,"step":1,"d":[6,15]},{"k":"GRAVITY","l":"Gravity","min":10,"max":150,"step":5,"d":60},{"k":"MAX_DROPS","l":"Most droplets","min":0,"max":80,"step":1,"d":45},{"k":"BOUNCE","l":"Bounciness","min":0,"max":0.95,"step":0.05,"d":0.7},{"k":"COLOUR_S","l":"Seconds per colour cycle","min":5,"max":120,"step":5,"d":30},{"k":"TONES","l":"Tone spread","min":0,"max":0.5,"step":0.05,"d":0.3}],"morph.py":[{"k":"HOLD","l":"Seconds per shape","min":1,"max":20,"step":0.5,"d":6},{"k":"MELT","l":"Seconds to melt","min":1,"max":15,"step":0.5,"d":4},{"k":"FLOW","l":"Flow speed","min":5,"max":120,"step":5,"d":40},{"k":"HUE_DRIFT","l":"Rainbow drift","min":0,"max":20,"step":1,"d":5}],"plasma.py":[{"k":"SPEED","l":"Speed","min":0.05,"max":2,"step":0.05,"d":0.3}],"rainbow.py":[{"k":"SPEED","l":"Speed","min":0.05,"max":1,"step":0.05,"d":0.2}],"sand.py":[{"k":"POUR_S","l":"Seconds per pour","min":1,"max":20,"step":1,"d":[4,9]},{"k":"PAUSE_S","l":"Seconds between pours","min":0,"max":10,"step":0.5,"d":[1,3]},{"k":"RATE","l":"Pour rate","min":10,"max":255,"step":5,"d":[70,200]},{"k":"FULL","l":"Grains before draining","min":60,"max":230,"step":10,"d":170}],"snake.py":[{"k":"SPEED","l":"Moves per second","min":2,"max":25,"step":1,"d":9},{"k":"START","l":"Starting length","min":2,"max":10,"step":1,"d":3},{"k":"HAND_S","l":"Seconds before autopilot takes over","min":1,"max":15,"step":1,"d":4}],"tetris.py":[{"k":"TICK","l":"Seconds per move","min":0.02,"max":0.4,"step":0.01,"d":0.07},{"k":"FAST_TICK","l":"Seconds per move (fast)","min":0.01,"max":0.1,"step":0.01,"d":0.03}],"tides.py":[{"k":"SPEED","l":"Wave speed","min":1,"max":10,"step":1,"d":3},{"k":"COLOUR_SPEED","l":"Colour speed","min":0,"max":10,"step":1,"d":2}],"tunnel.py":[{"k":"SPEED","l":"Driving speed","min":5,"max":100,"step":5,"d":34},{"k":"SPIN","l":"Spin","min":0,"max":30,"step":1,"d":9},{"k":"CURVE","l":"Curves","min":0,"max":8,"step":1,"d":5}],"warp.py":[{"k":"STARS","l":"Stars","min":5,"max":60,"step":1,"d":28},{"k":"ACCEL","l":"Acceleration","min":1.02,"max":1.3,"step":0.01,"d":1.13}],"waterjet.py":[{"k":"MAX_DROPS","l":"Most droplets","min":10,"max":150,"step":5,"d":90},{"k":"SPURT_S","l":"Seconds per spurt","min":0.5,"max":15,"step":0.5,"d":[3.5,6.5]},{"k":"PAUSE_S","l":"Seconds between spurts","min":0.5,"max":30,"step":0.5,"d":[5,10]},{"k":"GRAVITY","l":"Gravity","min":1,"max":20,"step":1,"d":7},{"k":"BOUNCE","l":"Bounciness","min":0,"max":250,"step":5,"d":185},{"k":"TRAIL","l":"Trail length","min":0,"max":250,"step":5,"d":110}],"starfall.py":[{"k":"SHOOT_S","l":"Seconds between shooting stars","min":0.5,"max":20,"step":0.5,"d":[2,7]},{"k":"SPEED","l":"Shooting star speed (px/s)","min":2,"max":30,"step":1,"d":[6,15]},{"k":"TAIL","l":"Tail length","min":1,"max":12,"step":1,"d":[3,7]},{"k":"FIREBALL","l":"Fireball chance","min":0,"max":1,"step":0.05,"d":0.12},{"k":"SHOWER_S","l":"Seconds between showers","min":10,"max":300,"step":5,"d":[45,90]},{"k":"SHOWER_SIZE","l":"Meteors per shower","min":2,"max":14,"step":1,"d":[6,10]},{"k":"STARS","l":"Background stars","min":0,"max":60,"step":1,"d":24},{"k":"TWINKLE","l":"Twinkle","min":0,"max":8,"step":1,"d":3}],"spaceship.py":[{"k":"OUTLINE","l":"Dimming round the ship","min":0,"max":1,"step":0.05,"d":0.6},{"k":"SPEED","l":"Flying speed","min":0.2,"max":3,"step":0.1,"d":1},{"k":"ASTEROID_S","l":"Seconds between asteroids","min":0.5,"max":20,"step":0.5,"d":[2.5,7]},{"k":"AIMED","l":"Asteroids aimed at the ship","min":0,"max":1,"step":0.05,"d":0.45},{"k":"ROCK_SPEED","l":"Asteroid speed (px/s)","min":1,"max":15,"step":0.5,"d":[3,7]},{"k":"PLANET_SPEED","l":"Planet drift speed","min":0.05,"max":2,"step":0.05,"d":0.3},{"k":"GAP_S","l":"Seconds between planets","min":0,"max":60,"step":1,"d":[4,14]},{"k":"DODGE_SPEED","l":"Swerve speed","min":1,"max":20,"step":0.5,"d":7},{"k":"DRIFT","l":"How far it drifts back and forth","min":0,"max":11,"step":1,"d":[2,8]},{"k":"DRIFT_SPEED","l":"Drift speed","min":0.1,"max":4,"step":0.1,"d":0.8},{"k":"BACKDROP","l":"Background brightness","min":0.05,"max":1,"step":0.05,"d":0.3},{"k":"MUTE","l":"Background colour drain","min":0,"max":1,"step":0.05,"d":0.55},{"k":"UFO_S","l":"Seconds between flying saucers","min":5,"max":300,"step":5,"d":[25,70]},{"k":"UFO_SPEED","l":"Saucer speed","min":1,"max":15,"step":0.5,"d":5},{"k":"UFO_HOVER","l":"Seconds the saucer hovers","min":0,"max":15,"step":0.5,"d":[2,5]},{"k":"BEAM","l":"Tractor beam chance","min":0,"max":1,"step":0.05,"d":0.6}],"marquee.py":[{"k":"STYLE","l":"Colours","opts":["Rainbow","White","Warm","Cool","Neon"],"d":0},{"k":"SPEED","l":"Speed (px/s)","min":4,"max":40,"step":1,"d":12},{"k":"WAVE","l":"Bounce height","min":0,"max":4,"step":1,"d":2},{"k":"BOUNCE","l":"Bounce speed","min":0,"max":15,"step":0.5,"d":6},{"k":"SPARKLE","l":"Sparkles","min":0,"max":1,"step":0.05,"d":0.5},{"k":"COLOUR_SPEED","l":"Colour dance speed","min":0,"max":3,"step":0.1,"d":0.6},{"k":"GAP","l":"Gap before repeating (px)","min":0,"max":40,"step":1,"d":10}],"maze.py":[{"k":"PLAYER_SPEED","l":"Firefly speed","min":1,"max":12,"step":0.5,"d":5.5},{"k":"SPIDER_SPEED","l":"Spider speed","min":0.5,"max":8,"step":0.1,"d":3},{"k":"SPEED_UP","l":"Spiders speed up each maze","min":0,"max":1,"step":0.05,"d":0.25},{"k":"SPIDERS","l":"Spiders","min":0,"max":6,"step":1,"d":3},{"k":"CHASE","l":"How hard spiders chase","min":0,"max":1,"step":0.05,"d":0.6},{"k":"LOOPS","l":"Maze loops","min":0,"max":1,"step":0.05,"d":0.5},{"k":"SAFE","l":"Firefly caution","min":0,"max":6,"step":1,"d":2},{"k":"BOOST_S","l":"Berry boost (s)","min":0,"max":10,"step":0.5,"d":4}],"boat.py":[{"k":"SUNNY_S","l":"Seconds of sunshine","min":5,"max":180,"step":5,"d":[20,45]},{"k":"RAINY_S","l":"Seconds of rain","min":5,"max":180,"step":5,"d":[15,35]},{"k":"CHANGE_S","l":"Seconds for the weather to turn","min":1,"max":30,"step":1,"d":6},{"k":"CALM_WAVES","l":"Waves when sunny","min":0,"max":3,"step":0.1,"d":0.7},{"k":"STORM_WAVES","l":"Waves in a storm","min":0,"max":4,"step":0.1,"d":2.6},{"k":"TOSS","l":"How hard storms toss the boat","min":0,"max":3,"step":0.1,"d":1},{"k":"RAIN","l":"Rain","min":0,"max":2,"step":0.1,"d":1},{"k":"LIGHTNING","l":"Lightning","min":0,"max":5,"step":0.25,"d":1}],"world.py":[{"k":"WEATHER","l":"Weather","opts":["Live","Clear","Cloudy","Rain","Storm","Fog","Snow"],"d":0},{"k":"FAST","l":"Time","opts":["Real time","A day in 2 minutes"],"d":0},{"k":"CONTRAST","l":"Contrast","min":0.6,"max":2.5,"step":0.1,"d":1.5},{"k":"BUTTERFLIES","l":"Butterflies","min":0,"max":8,"step":1,"d":3},{"k":"FIREFLIES","l":"Fireflies","min":0,"max":24,"step":1,"d":10},{"k":"CRITTERS","l":"Bunny","opts":["Off","On"],"d":1},{"k":"STARS","l":"Stars","min":0,"max":50,"step":1,"d":22},{"k":"FETCH_MIN","l":"Minutes between weather reports","min":5,"max":60,"step":5,"d":15}],"kaleidoscope.py":[{"k":"FOUR_WAY","l":"Mirrors","opts":["Eight","Four"],"d":0},{"k":"BEADS","l":"Pieces of glass","min":3,"max":16,"step":1,"d":9},{"k":"SPIN","l":"Turning speed","min":0,"max":0.6,"step":0.02,"d":0.12},{"k":"TUMBLE","l":"Tumbling speed","min":0,"max":6,"step":0.2,"d":1.6},{"k":"SHAKE_S","l":"Seconds between shakes","min":5,"max":180,"step":5,"d":[25,50]},{"k":"COLOURS","l":"How much of the rainbow","min":1,"max":6,"step":1,"d":4},{"k":"COLOUR_SPEED","l":"Colour drift","min":0,"max":10,"step":1,"d":2},{"k":"LINES","l":"Dark lines between pieces","min":0,"max":1.5,"step":0.1,"d":0.6},{"k":"GLOW","l":"Glow in the middle of pieces","min":0,"max":1,"step":0.05,"d":0.6}],"mirrorlife.py":[{"k":"PALETTE","l":"Palette","opts":["New each round","Ember","Lagoon","Neon","Citrus","Aurora","Candy","Ice"],"d":0},{"k":"STEP_SECONDS","l":"Seconds per generation","min":0.05,"max":3,"step":0.05,"d":0.5},{"k":"FADE_IN","l":"Seconds to glow in","min":0,"max":3,"step":0.05,"d":0.25},{"k":"FADE_OUT","l":"Seconds to fade away","min":0,"max":8,"step":0.1,"d":1.2},{"k":"FLASH","l":"Newborn flash","min":0,"max":1,"step":0.05,"d":0.5},{"k":"ECHO","l":"Mirror lag (generations)","min":0,"max":8,"step":1,"d":0},{"k":"MIRROR_HUE","l":"Right half tint","min":0,"max":255,"step":8,"d":0},{"k":"SEED_CHANCE","l":"Seeds by the middle vs soups","min":0,"max":1,"step":0.1,"d":0.5},{"k":"DENSITY","l":"Soup density","min":0.05,"max":0.8,"step":0.05,"d":0.35},{"k":"HUE_SPEED","l":"Colour stream speed","min":0,"max":120,"step":5,"d":40},{"k":"AGE_SHIFT","l":"Colour change with age","min":0,"max":64,"step":1,"d":14}],"slowlife.py":[{"k":"PALETTE","l":"Palette","opts":["New each round","Ember","Lagoon","Neon","Citrus","Aurora","Candy","Ice"],"d":0},{"k":"STEP_SECONDS","l":"Seconds per generation","min":1,"max":15,"step":0.5,"d":4},{"k":"FADE_IN","l":"Seconds to glow in","min":0,"max":10,"step":0.5,"d":2.5},{"k":"FADE_OUT","l":"Seconds to fade away","min":0,"max":20,"step":0.5,"d":6},{"k":"FLASH","l":"Newborn flash","min":0,"max":1,"step":0.05,"d":0.35},{"k":"ECHO","l":"Mirror lag (generations)","min":0,"max":8,"step":1,"d":0},{"k":"MIRROR_HUE","l":"Right half tint","min":0,"max":255,"step":8,"d":0},{"k":"SEED_CHANCE","l":"Seeds by the middle vs soups","min":0,"max":1,"step":0.1,"d":0.5},{"k":"DENSITY","l":"Soup density","min":0.05,"max":0.8,"step":0.05,"d":0.35},{"k":"HUE_SPEED","l":"Colour stream speed","min":0,"max":40,"step":1,"d":5},{"k":"AGE_SHIFT","l":"Colour change with age","min":0,"max":64,"step":1,"d":10}]};
+  let tune = null;
+  const decs = s => { const t = String(s); return t.includes(".") ? t.split(".")[1].length : 0; };
+  const snapV = (v, c) => +(Math.round(v / c.step) * c.step).toFixed(decs(c.step));
+  const fmtV = (v, c) => { const d = c.step ? decs(c.step) : 0; return d ? (+v).toFixed(d) : String(v); };
+  const constRe = k => new RegExp("^(" + k + "\\s*=\\s*)(\\([^)\\n]*\\)|-?[0-9.]+)", "m");
+  function readConst(src, k) {
+    const m = src.match(constRe(k)); if (!m) return null;
+    const raw = m[2];
+    return { v: raw[0] === "(" ? raw.slice(1, -1).split(",").map(s => +s.trim()) : +raw, isInt: !raw.includes(".") };
+  }
+  function pyNum(v, c, isInt) {
+    if (isInt && Number.isInteger(c.step || 1)) return String(Math.round(v));
+    const s = String(+(+v).toFixed(Math.max(decs(c.step || 1), 1)));
+    return /[.e]/.test(s) ? s : s + ".0";
+  }
+  function writeConst(src, c, v, isInt) {
+    const raw = Array.isArray(v) ? "(" + v.map(x => pyNum(x, c, isInt)).join(", ") + ")" : pyNum(v, c, isInt);
+    return src.replace(constRe(c.k), (m, a) => a + raw);
+  }
+  async function openTune(n, el) {
+    if (!TUNE[n]) { note(info(n)[0] + " has no settings to change."); return; }
+    tune = { name: n, src: null, vals: {}, ints: {}, loading: true };
+    renderTune(); $("tune").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (el) setLoading(el, true); else { loadingTile = n; render(); }
+    try {
+      const src = textOf(await call("get_program_source", { name: n }));
+      if (!/def frame/.test(src)) throw { code: "tool_error", message: src || "couldn't read " + n };
+      if (!tune || tune.name !== n) return;
+      tune.src = src;
+      for (const c of TUNE[n]) { const r = readConst(src, c.k); if (r) { tune.vals[c.k] = r.v; tune.ints[c.k] = r.isInt; } }
+    } catch (e) { tune = null; renderTune(); failNote(e, () => openTune(n, el)); return; }
+    finally { if (el) setLoading(el, false); else if (loadingTile === n) { loadingTile = null; render(); } }
+    tune.loading = false; renderTune();
+  }
+  function knob(c) {
+    const v = tune.vals[c.k], id = "k_" + c.k;
+    if (c.opts) return `<div class="knob"><span class="kl">${esc(c.l)}</span><div class="modes seg" role="group" aria-label="${esc(c.l)}">${c.opts.map((o, i) => `<button type="button" data-k="${c.k}" data-opt="${i}" aria-pressed="${v === i}">${esc(o)}</button>`).join("")}</div></div>`;
+    if (Array.isArray(v)) return `<div class="knob"><label class="kl" for="${id}_0">${esc(c.l)} <output>${fmtV(Math.min(...v), c)}–${fmtV(Math.max(...v), c)}</output></label><div class="pair"><input type="range" id="${id}_0" data-k="${c.k}" data-i="0" min="${c.min}" max="${c.max}" step="${c.step}" value="${v[0]}" aria-label="${esc(c.l)}, low end"><input type="range" data-k="${c.k}" data-i="1" min="${c.min}" max="${c.max}" step="${c.step}" value="${v[1]}" aria-label="${esc(c.l)}, high end"></div></div>`;
+    return `<div class="knob"><label class="kl" for="${id}">${esc(c.l)} <output>${fmtV(v, c)}</output></label><input type="range" id="${id}" data-k="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${v}"></div>`;
+  }
+  function renderTune() {
+    const el = $("tune");
+    if (!tune) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    let h = `<div class="rothead"><h2 id="tuneH">Settings · ${esc(info(tune.name)[0])}</h2><button type="button" class="x" id="tuneClose" aria-label="Close settings">×</button></div>`;
+    if (tune.loading) h += '<p class="foot">' + SPIN + 'Reading the program from the board…</p>';
+    else {
+      const cs = TUNE[tune.name].filter(c => c.k in tune.vals);
+      h += cs.length ? '<div class="knobs">' + cs.map(knob).join("") + "</div>" : '<p class="foot">This copy of the program has none of the usual settings.</p>';
+      h += '<div class="rotrow"><button type="button" class="btn pri" data-apply="1">Play with these settings</button><button type="button" class="btn" data-apply="0">Save without playing</button><button type="button" class="btn" id="tuneReset">Defaults</button></div>';
+    }
+    el.innerHTML = h;
+  }
+
+
+  // Marquee: a free-text message, saved on the board as marquee.py
+  const MQ = "marquee.py";
+  const MQ_SRC = "# Marquee: your message scrolls across the board, jazzy and lively. The\n# letters bob along in a wave, colours dance through them, each letter has a\n# soft shadow, and sparkles pop and twinkle around the words. Set it from the\n# Unicorn Remote's Marquee card, or edit the lines below.\n#   A = pause / resume\n#\n# Memory-friendly: letter positions and pens are worked out once in setup(),\n# sparkles live in a fixed pool, and each frame only draws what's on screen.\nimport math\nimport random\nfrom stellar import StellarUnicorn\n\nMESSAGE = \"Hello from the Unicorn!\"\nSTYLE = 0            # colours: 0 rainbow, 1 white, 2 warm, 3 cool, 4 neon\nSPEED = 12           # pixels a second\nWAVE = 2             # how far the letters bob up and down (0 = straight)\nBOUNCE = 6.0         # how fast they bob\nSPARKLE = 0.5        # how many sparkles (0 = none, 1 = lots)\nCOLOUR_SPEED = 0.6   # how fast the colours dance along the message\nGAP = 10             # blank pixels before the message comes round again\n\nHUES = 32\nSPARKS = 18\n\ndef hsv(h, s, v):\n    i = int(h * 6)\n    f = h * 6 - i\n    p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)\n    r, g, b = ((v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q))[i % 6]\n    return int(r * 255), int(g * 255), int(b * 255)\n\ndef setup(su, g):\n    global CHARS, TOTAL, PENS, SHADOW, SPARKPEN, BLACK, BOB, sparks, scroll, last_t, paused, a_was\n    g.set_font(\"bitmap8\")\n    BLACK = g.create_pen(0, 0, 0)\n    CHARS = []\n    x = 0\n    for ch in MESSAGE or \" \":\n        w = 4 if ch == \" \" else g.measure_text(ch, 1)\n        CHARS.append((ch, x, w))\n        x += w + 1\n    TOTAL = x\n    cols = []\n    for i in range(HUES):\n        k = abs(i - HUES // 2) / (HUES // 2)          # 1 -> 0 -> 1 round the table\n        if STYLE == 1:\n            c = hsv(0.6, 0.08 * k, 1.0)\n        elif STYLE == 2:\n            c = hsv(0.13 * k, 0.85, 1.0)\n        elif STYLE == 3:\n            c = hsv(0.47 + 0.25 * k, 0.75, 1.0)\n        elif STYLE == 4:\n            c = (255, 40, 200) if i % 8 < 4 else (40, 240, 255)\n        else:\n            c = hsv(i / HUES, 0.9, 1.0)\n        cols.append(c)\n    PENS = [g.create_pen(*c) for c in cols]\n    SHADOW = [g.create_pen(c[0] // 7, c[1] // 7, c[2] // 7) for c in cols]\n    SPARKPEN = [g.create_pen(v, v, min(255, v + 40)) for v in (40, 90, 150, 215, 255)]\n    BOB = [int(WAVE * math.sin(k * 2 * math.pi / 64) + 0.5 * (1 if k < 32 else -1)) for k in range(64)]\n    sparks = [[0, 0, 0] for _ in range(SPARKS)]       # x, y, life (0 = free)\n    scroll = 0.0\n    last_t = 0.0\n    paused = False\n    a_was = False\n\ndef frame(su, g, t):\n    global scroll, last_t, paused, a_was\n    a = su.is_pressed(StellarUnicorn.SWITCH_A)\n    if a and not a_was:\n        paused = not paused\n    a_was = a\n    dt = t - last_t\n    if dt > 0.1:\n        dt = 0.1\n    last_t = t\n    if not paused:\n        scroll += SPEED * dt\n\n    g.set_pen(BLACK)\n    g.clear()\n\n    # sparkles twinkle and fade behind the words\n    if not paused and random.random() < SPARKLE * 0.6:\n        for s in sparks:\n            if not s[2]:\n                s[0] = random.randrange(16)\n                s[1] = random.choice((0, 1, 2, 13, 14, 15, random.randrange(16)))\n                s[2] = 9\n                break\n    for s in sparks:\n        if s[2]:\n            v = s[2] if s[2] < 5 else 9 - s[2]\n            g.set_pen(SPARKPEN[v if v < 5 else 4])\n            g.pixel(s[0], s[1])\n            if not paused:\n                s[2] -= 1\n\n    period = TOTAL + GAP + 16\n    x0 = 16 - int(scroll) % period\n    shift = int(t * COLOUR_SPEED * HUES)\n    phase = int(t * BOUNCE * 64 / 6.283)\n    for i in range(len(CHARS)):\n        ch, off, w = CHARS[i]\n        x = x0 + off\n        if x > 15:\n            break\n        if x + w < 0 or ch == \" \":\n            continue\n        y = 4 + BOB[(phase + i * 9) & 63]\n        c = (i * 3 + shift) % HUES\n        g.set_pen(SHADOW[c])\n        g.text(ch, x + 1, y + 1, -1, 1)\n        g.set_pen(PENS[c])\n        g.text(ch, x, y, -1, 1)\n    return 0.03\n";
+  const mq = { style: 0, speed: 12 };
+  // the board's font only has plain ASCII, so tidy up curly quotes and the like
+  const plainText = s => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...").replace(/[^\x20-\x7e]/g, "").replace(/\s+/g, " ").trim();
+  function mqCode(text) {
+    return MQ_SRC.replace(/^MESSAGE = .*$/m, () => "MESSAGE = " + JSON.stringify(text))
+      .replace(/^(STYLE\s*=\s*)\d+/m, (m, a) => a + mq.style)
+      .replace(/^(SPEED\s*=\s*)\d+/m, (m, a) => a + mq.speed);
+  }
+  function renderMq() {
+    document.querySelectorAll("#mqStyle [data-st]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.st === mq.style));
+    $("mqSpeed").value = mq.speed; $("mqSpeedOut").textContent = mq.speed;
+    const msg = $("mqText").value.trim();
+    $("mqState").textContent = S.running === MQ ? "Playing now" : msg ? "“" + (msg.length > 28 ? msg.slice(0, 27) + "…" : msg) + "”" : "Scroll a message";
+  }
+  async function loadMarquee() {
+    $("mqState").innerHTML = SPIN + "Loading…"; $("mqText").disabled = true; $("mqGo").disabled = true;
+    try {
+      const t = textOf(await call("get_program_source", { name: MQ }));
+      const m = t.match(/^MESSAGE = (".*")\s*$/m), st = t.match(/^STYLE\s*=\s*(\d+)/m), sp = t.match(/^SPEED\s*=\s*(\d+)/m);
+      if (m && !$("mqText").value) { try { $("mqText").value = JSON.parse(m[1]); } catch (e) {} }  // fills the fold summary too
+      if (st) mq.style = +st[1];
+      if (sp) mq.speed = +sp[1];
+    } catch (e) { /* no marquee saved yet */ }
+    $("mqText").disabled = false; $("mqGo").disabled = false;
+    renderMq();
+  }
+  function sendMarquee() {
+    const text = plainText($("mqText").value);
+    if (!text) { note("Type a message first."); $("mqText").focus(); return; }
+    $("mqText").value = text;
+    act("upload_program", { name: MQ, code: mqCode(text), run: true, make_default: false }, () => { S.running = MQ; renderMq(); note("Showing your message on the board."); }, $("mqGo"));
+  }
+
+  const everyText = s => s < 3600 ? (s / 60) + " min" : (s / 3600) + " h";
+  const rotSummary = () => rot.list.length + " program" + (rot.list.length === 1 ? "" : "s") + ", every " + everyText(rot.secs);
+  let drag = null;
+  function renderRot() {
+    const c = $("rotChips");
+    c.innerHTML = rot.list.length ? rot.list.map((n, i) => `<li class="chip${drag && drag.i === i ? " dragging" : ""}" data-i="${i}" tabindex="0" aria-label="${i + 1}. ${esc(info(n)[0])}"><span class="grip" aria-hidden="true">⋮⋮</span><b>${i + 1}</b><span style="display:flex;gap:8px;align-items:center;min-width:0"><span class="led" aria-hidden="true">${led(info(n)[2], 4)}</span><span class="cn">${esc(info(n)[0])}</span></span><button type="button" data-rm="${esc(n)}" aria-label="Take ${esc(info(n)[0])} out of the rotation">×</button></li>`).join("")
+      : '<li class="foot">No programs yet. Choose “Rotation” above the programs and tap the ones you want, then drag them into order here.</li>';
+    if (drag && drag.focus) { const el = c.querySelector(`[data-i="${drag.i}"]`); if (el) el.focus(); drag = null; }
+    $("rotState").innerHTML = !rot.loaded ? SPIN + "Loading…" : !rot.list.length ? "Take turns between programs" : esc(rot.list.length + " program" + (rot.list.length === 1 ? "" : "s") + " · " + (S.running === ROT ? "playing now" : "every " + everyText(rot.secs)));
+    $("rotStart").disabled = !rot.list.length;
+    if (document.activeElement !== $("rotEvery")) { const v = String(rot.secs); if ([...$("rotEvery").options].some(o => o.value === v)) $("rotEvery").value = v; }
+  }
+  function rotCode() {
+    return "# Rotation: plays a list of programs one after another, switching every\n# SECONDS. Set it up from the Unicorn Remote, or edit the two lines below.\n# Programs change on the clock, so after a restart it picks up where it was.\n# Old-style programs (ones with their own loop) are skipped.\n" +
+      "PLAYLIST = " + JSON.stringify(rot.list).replace(/,/g, ", ") + "\nSECONDS = " + rot.secs + "\n\n" + ENGINE;
+  }
+  async function loadRot() {
+    try {
+      const r = await call("get_program_source", { name: ROT });
+      const t = textOf(r);
+      const m = t.match(/^PLAYLIST\s*=\s*(\[[^\]]*\])/m), sec = t.match(/^SECONDS\s*=\s*(\d+)/m);
+      if (m) { try { rot.list = JSON.parse(m[1].replace(/'/g, '"')).filter(n => typeof n === "string"); } catch (e) {} }
+      if (sec) rot.secs = +sec[1];
+    } catch (e) { /* no saved rotation yet */ }
+    rot.loaded = true; render();
+  }
+
+  function render() {
+    const R = S.running, D = S.def;
+    $("dot").className = "dot" + (S.online ? " on" : "");
+    $("connText").innerHTML = S.sample ? SPIN + "Connecting to the board…" : S.online ? "Board online" : "Board offline";
+    if (R === ROT) { $("nowName").textContent = "Rotation"; $("nowLed").innerHTML = led(rot.list.length ? info(rot.list[0])[2] : ["#8f7bff", "#3df2ff", "#ff7ad9", "#ffd23d"], 6); }
+    else if (R) { const I = info(R); $("nowName").textContent = I[0]; $("nowLed").innerHTML = led(I[2], 6); }
+    else { $("nowName").textContent = S.sample ? "…" : "Nothing playing"; $("nowLed").innerHTML = led(["#333", "#333", "#333", "#333"], 6); }
+    $("nowSub").textContent = (R === ROT ? rotSummary() + " · " : "") + (D ? "Power-on: " + (D === ROT ? "Rotation" : info(D)[0]) : "No power-on program");
+    renderRot();
+    if (typeof renderMq === "function") renderMq();
+    const b = Math.round((S.brightness ?? 0.5) * 100); if (document.activeElement !== $("bright")) { $("bright").value = b; $("brightOut").textContent = b + "%"; }
+    if (!$("stopBtn").classList.contains("loading")) $("stopBtn").disabled = !R;
+    if (!$("tuneBtn").classList.contains("loading")) { const can = !!(R && TUNE[R]); $("tuneBtn").disabled = !can; $("tuneBtn").title = can ? "Change " + info(R)[0] + "'s settings" : R ? info(R)[0] + " has no settings" : "Nothing playing"; }
+    const groups = {};
+    S.programs.filter(n => !HIDE(n)).forEach(n => { const g = info(n)[3]; (groups[g] = groups[g] || []).push(n); });
+    const gs = ORDER.filter(g => groups[g]);
+    const jh = gs.map(g => `<button type="button" data-jump="${esc(g)}">${esc(g)}</button>`).join("");
+    if ($("jump").innerHTML !== jh) $("jump").innerHTML = jh;
+    $("library").innerHTML = gs.map(g => `<section class="group" id="g-${esc(g)}"><h2>${esc(g)}</h2><div class="grid">${groups[g].sort(byCat).map(n => {
+      const I = info(n), on = n === R, star = n === D, ri = rot.list.indexOf(n), off = (mode === "rotation" && LEGACY.has(n)) || (mode === "tune" && !TUNE[n]);
+      return `<button type="button" class="tile${n === loadingTile ? " loading" : ""}${mode === "rotation" && ri >= 0 ? " has-order" : ""}" data-n="${esc(n)}" aria-pressed="${on}"${n === loadingTile ? ' aria-busy="true"' : ""}${off ? " disabled" : ""}>${mode === "rotation" && ri >= 0 ? `<span class="order">${ri + 1}</span>` : ""}<div class="led" aria-hidden="true">${led(I[2], 4)}</div><span><span class="tn">${esc(I[0])}</span>${I[1] ? `<span class="td">${esc(I[1])}</span>` : ""}<span class="tags">${on ? '<span class="tag live">Playing</span>' : ""}${star ? '<span class="tag star">Power-on</span>' : ""}${LEGACY.has(n) ? '<span class="tag">Classic</span>' : ""}</span></span></button>`;
+    }).join("")}</div></section>`).join("");
+  }
+
+  let noteTimer = null;
+  function note(text, kind, action) {
+    const m = $("msg");
+    clearTimeout(noteTimer);
+    if (!text) { m.hidden = true; return; }
+    m.hidden = false; m.className = "msg" + (kind === "bad" ? " bad" : "");
+    m.innerHTML = `<span>${esc(text)}</span>`;
+    if (action) { const b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = action[0]; b.onclick = () => { note(""); action[1](); }; m.appendChild(b); }
+    const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.setAttribute("aria-label", "Dismiss"); x.textContent = "×"; x.onclick = () => note(""); m.appendChild(x);
+    if (kind !== "bad" && !action) noteTimer = setTimeout(() => note(""), 4500);
+  }
+  function failNote(e, retry) {
+    const c = e && e.code;
+    if (c === "network") { note(navigator.onLine === false ? "You're offline." : "Couldn't reach the Unicorn cloud.", "bad", ["Try again", retry]); return; }
+    if (c === "app_gone") { note("This app's address no longer works. Was the Worker redeployed with a new secret?", "bad"); return; }
+    if (c === "server_not_connected") note("The stellar1 connector isn't connected. Add it in claude.ai Settings → Connectors.", "bad");
+    else if (c === "needs_reauth") note("Reconnect stellar1 in claude.ai Settings → Connectors.", "bad");
+    else if (c === "not_in_manifest" || c === "approval_required" || c === "not_granted") note("This page needs your OK to control the board.", "bad", ["Allow and retry", retry]);
+    else if (c === "tool_error" && /^Queued/.test(e.message || "")) note("The board is offline, so that's queued. It'll happen when the board checks in again.", "bad");
+    else if (c === "tool_error") note("The board said: " + String(e.message || "error").slice(0, 200), "bad");
+    else note("Couldn't reach the board just now.", "bad", ["Try again", retry]);
+  }
+  const textOf = r => { if (!r) return ""; if (typeof r.payload === "string") return r.payload; const t = (r.content || []).find(x => x.type === "text"); return t ? t.text : ""; };
+
+  // App version: ask the Worker that serves this page (same secret address) to run the tool.
+  async function call(tool, input) {
+    let r;
+    try {
+      r = await fetch("api", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({ tool, args: input || {} }) });
+    } catch (e) { throw { code: "network" }; }
+    if (r.status === 404) throw { code: "app_gone" };
+    if (!r.ok) throw { code: "upstream_error" };
+    const out = await r.json();
+    const t = textOf(out);
+    if (out.isError) throw { code: "tool_error", message: t };
+    return out;
+  }
+  async function refresh() {
+    try {
+      const r = await call("get_board_status");
+      let p = r.payload; if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { p = null; } }
+      if (!p) { const t = textOf(r); try { p = JSON.parse(t); } catch (e) { p = null; } }
+      if (!p) throw { code: "upstream_error" };
+      const B = p.board || {};
+      S = { online: !!p.online, programs: (B.programs || []).slice().sort(byCat), running: B.running || null, def: B.default || null, brightness: B.brightness, sample: false };
+      if (!S.online) note("The board hasn't checked in recently. Is it plugged in and on Wi-Fi?", "bad"); else if (!busy && $("msg").classList.contains("bad")) note("");
+      render();
+    } catch (e) { failNote(e, refresh); }
+  }
+  // el: the button or readout that started it, or a program name for a tile
+  async function act(tool, input, done, el) {
+    if (busy) return; busy = true;
+    const tile = typeof el === "string" ? el : null;
+    if (tile) { loadingTile = tile; render(); } else setLoading(el, true);
+    document.body.classList.add("working");
+    try { const r = await call(tool, input); const t = textOf(r); if (/^error/i.test(t)) note(t, "bad"); else { note(""); done && done(t); } }
+    catch (e) { failNote(e, () => act(tool, input, done, el)); }
+    finally {
+      busy = false; document.body.classList.remove("working");
+      if (tile) loadingTile = null; else setLoading(el, false);
+      render();
+    }
+  }
+
+  $("library").addEventListener("click", e => {
+    const b = e.target.closest(".tile"); if (!b) return;
+    const n = b.dataset.n;
+    if (mode === "default") { act("set_default_program", { name: n }, () => { S.def = n; setMode("play"); }, n); return; }
+    if (mode === "tune") { openTune(n); return; }
+    if (mode === "rotation") { const i = rot.list.indexOf(n); if (i >= 0) rot.list.splice(i, 1); else rot.list.push(n); render(); return; }
+    if (LEGACY.has(n)) note(info(n)[0] + " restarts the board. Press the sleep button on the board to come back.");
+    S.running = n; render();
+    act("run_program", { name: n }, () => { S.running = n; }, n);
+  });
+  $("stopBtn").onclick = () => act("stop_program", {}, () => { S.running = null; }, $("stopBtn"));
+  $("refreshBtn").onclick = async () => { setLoading($("refreshBtn"), true); try { await refresh(); } finally { setLoading($("refreshBtn"), false); } };
+  let bt = null;
+  $("bright").addEventListener("input", e => {
+    const v = +e.target.value; $("brightOut").textContent = v + "%";
+    clearTimeout(bt); bt = setTimeout(() => act("set_brightness", { value: v / 100 }, () => { S.brightness = v / 100; }, $("brightOut")), 350);
+  });
+  function setMode(m) {
+    mode = m;
+    $("hint").innerHTML = "<span>" + esc(HINTS[m]) + "</span>" + (m !== "play" ? '<button type="button" class="btn" id="modeDone" style="min-height:30px;padding:3px 12px;flex:none">Done</button>' : "");
+    $("sel").classList.toggle("alt", m !== "play");
+    document.querySelectorAll("#modeGroup button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+    if (m === "rotation") fold("rotFold", true, false);
+    render();
+  }
+  $("sel").addEventListener("click", e => { if (e.target.closest("#modeDone")) setMode("play"); });
+  $("jump").addEventListener("click", e => { const b = e.target.closest("[data-jump]"); if (b) document.getElementById("g-" + b.dataset.jump).scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); });
+  for (const id of ["rotFold", "mqFold"]) { $(id).addEventListener("click", () => fold(id, $(id).getAttribute("aria-expanded") !== "true")); if (store.get("fold:" + id) === "1") fold(id, true, false); }
+  document.getElementById("modeGroup").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
+  $("rotChips").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (!b) return; rot.list = rot.list.filter(n => n !== b.dataset.rm); render(); });
+  // drag to reorder: pointer events, so it works with a finger as well as a mouse
+  $("rotChips").addEventListener("pointerdown", e => {
+    const c = e.target.closest(".chip"); if (!c || e.target.closest("[data-rm]")) return;
+    drag = { i: +c.dataset.i }; c.classList.add("dragging"); e.preventDefault();
+  });
+  window.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY), over = el && el.closest("#rotChips .chip");
+    if (!over) return;
+    const j = +over.dataset.i; if (j === drag.i) return;
+    const [n] = rot.list.splice(drag.i, 1); rot.list.splice(j, 0, n); drag.i = j; renderRot();
+  });
+  const endDrag = () => { if (drag) { drag = null; renderRot(); } };
+  window.addEventListener("pointerup", endDrag); window.addEventListener("pointercancel", endDrag);
+  // keyboard: arrow keys move the focused item
+  $("rotChips").addEventListener("keydown", e => {
+    const c = e.target.closest(".chip"); if (!c) return;
+    const i = +c.dataset.i, d = e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : 0;
+    if (!d || i + d < 0 || i + d >= rot.list.length) return;
+    e.preventDefault(); const [n] = rot.list.splice(i, 1); rot.list.splice(i + d, 0, n); drag = { i: i + d, focus: true }; renderRot();
+  });
+  $("rotEvery").addEventListener("change", e => { rot.secs = +e.target.value; render(); });
+  $("rotStart").onclick = () => {
+    if (!rot.list.length) return;
+    const mk = $("rotDefault").checked;
+    act("upload_program", { name: ROT, code: rotCode(), run: true, make_default: mk }, t => { S.running = ROT; if (mk) S.def = ROT; setMode("play"); note("Rotation started: " + rotSummary() + "."); }, $("rotStart"));
+  };
+
+  $("tune").addEventListener("input", e => {
+    const r = e.target.closest("input[type=range]"); if (!r || !tune) return;
+    const c = TUNE[tune.name].find(x => x.k === r.dataset.k), v = snapV(+r.value, c);
+    if (r.dataset.i != null) { const p = tune.vals[c.k].slice(); p[+r.dataset.i] = v; tune.vals[c.k] = p; } else tune.vals[c.k] = v;
+    const cur = tune.vals[c.k];
+    r.closest(".knob").querySelector("output").textContent = Array.isArray(cur) ? fmtV(Math.min(...cur), c) + "–" + fmtV(Math.max(...cur), c) : fmtV(cur, c);
+  });
+  $("tune").addEventListener("click", e => {
+    if (!tune) return;
+    if (e.target.closest("#tuneClose")) { tune = null; renderTune(); return; }
+    const o = e.target.closest("[data-opt]");
+    if (o) { tune.vals[o.dataset.k] = +o.dataset.opt; renderTune(); return; }
+    if (e.target.closest("#tuneReset")) { for (const c of TUNE[tune.name]) if (c.k in tune.vals) tune.vals[c.k] = Array.isArray(c.d) ? c.d.slice() : c.d; renderTune(); return; }
+    const a = e.target.closest("[data-apply]");
+    if (!a || tune.loading) return;
+    let src = tune.src;
+    for (const c of TUNE[tune.name]) if (c.k in tune.vals) { let v = tune.vals[c.k]; if (Array.isArray(v)) v = [Math.min(...v), Math.max(...v)]; src = writeConst(src, c, v, tune.ints[c.k]); }
+    const run = a.dataset.apply === "1", n = tune.name;
+    act("upload_program", { name: n, code: src, run, make_default: false }, () => { if (tune && tune.name === n) tune.src = src; if (run) S.running = n; note((run ? "Playing " : "Saved ") + info(n)[0] + " with your settings."); }, a);
+  });
+  $("tuneBtn").onclick = () => { if (S.running && TUNE[S.running]) openTune(S.running, $("tuneBtn")); };
+  $("mqGo").onclick = sendMarquee;
+  $("mqText").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendMarquee(); } });
+  $("mqStyle").addEventListener("click", e => { const b = e.target.closest("[data-st]"); if (b) { mq.style = +b.dataset.st; renderMq(); } });
+  $("mqSpeed").addEventListener("input", e => { mq.speed = +e.target.value; $("mqSpeedOut").textContent = mq.speed; });
+  $("mqText").addEventListener("input", () => { if ($("mqFold").getAttribute("aria-expanded") !== "true") renderMq(); });
+  setMode("play");
+
+  render();
+  (async () => {
+    await refresh();
+    loadRot();
+    loadMarquee();
+    setInterval(() => { if (!document.hidden && !busy) refresh(); }, 30000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  })();
+})();
+</script>
+</body></html>

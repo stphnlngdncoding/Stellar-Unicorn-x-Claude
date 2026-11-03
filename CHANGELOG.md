@@ -5,6 +5,13 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Unicorn Remote on your iPhone (2026-11-03)
+
+- **The Worker serves the Remote as a phone web app** at `/app/<MCP_SECRET>/`: your connector URL with `/mcp/` changed to `/app/`. Add it to the iPhone home screen from Safari and it opens full screen with its own icon, and works from anywhere because it goes through the same command queue as Claude. No new secret; the page sends no referrer and isn't indexed.
+- The app uses the same tools as the connector minus `delete_program`. A command sent while the board is offline says it's queued and will run when the board checks back in.
+- `remote/build_app.py` builds the app page and icons from the artifact Remote; `cloud/deploy-app.sh` redeploys the Worker (secrets untouched) and prints the app's address. `setup.sh` prints it too.
+- Needs a Worker redeploy (`bash cloud/deploy-app.sh`); no board changes.
+
 ## Remote UX pass (2026-11-01)
 
 - **Programs first on a phone**: the Rotation and Marquee cards fold to a one-line summary ("3 programs · every 10 min", the current message) and remember whether you left them open, so the library starts on the first screen.

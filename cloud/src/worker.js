@@ -1,11 +1,16 @@
 // Unicorn cloud: a tiny relay between Claude and a Stellar Unicorn.
 //
 //   /mcp/<MCP_SECRET>   MCP server (streamable HTTP) that Claude connects to
+//   /app/<MCP_SECRET>/  the Unicorn Remote as a phone web app (add it to your
+//                       home screen); same secret, same tools as the connector
 //   /board/sync         the board checks in here every few seconds
 //                       (Authorization: Bearer <BOARD_TOKEN>)
 //
 // Commands from Claude are queued in a Durable Object; the board picks them up
 // on its next check-in, runs them, and reports results on the following one.
+
+import APP_HTML from "./app/index.html";
+import { ICON_180, ICON_512 } from "./app/icons.js";
 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const RESULT_WAIT_MS = 20000;
@@ -365,6 +370,56 @@ async function handleMcp(request, stub) {
 }
 
 // ---------------------------------------------------------------------------
+// Phone web app: the Unicorn Remote, served at /app/<MCP_SECRET>/
+// ---------------------------------------------------------------------------
+
+// Tools the app may use (no deleting from a phone tap).
+const APP_TOOLS = ["get_board_status", "run_program", "stop_program", "set_default_program",
+  "set_brightness", "upload_program", "get_program_source"];
+
+const PRIVATE = {
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Robots-Tag": "noindex, nofollow",
+  "X-Content-Type-Options": "nosniff",
+};
+
+function pngResponse(b64) {
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return new Response(bytes, { headers: { ...PRIVATE, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
+}
+
+async function handleApp(request, stub, rest, base) {
+  if (rest === "" || rest === "index.html") {
+    return new Response(APP_HTML, {
+      headers: { ...PRIVATE, "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'" },
+    });
+  }
+  if (rest === "manifest.webmanifest") {
+    return new Response(JSON.stringify({
+      name: "Unicorn Remote", short_name: "Unicorn", start_url: base, scope: base, display: "standalone",
+      background_color: "#0c0d12", theme_color: "#0c0d12",
+      icons: [{ src: "icon-180.png", sizes: "180x180", type: "image/png" },
+              { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }],
+    }), { headers: { ...PRIVATE, "Content-Type": "application/manifest+json" } });
+  }
+  if (rest === "icon-180.png") return pngResponse(ICON_180);
+  if (rest === "icon-512.png") return pngResponse(ICON_512);
+  if (rest === "api") {
+    if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: PRIVATE });
+    let body;
+    try { body = await request.json(); } catch { return new Response("bad request", { status: 400, headers: PRIVATE }); }
+    if (!APP_TOOLS.includes(body && body.tool)) return new Response("unknown tool", { status: 400, headers: PRIVATE });
+    let out;
+    try { out = await callTool(body.tool, body.args, stub); }
+    catch (e) { out = text("Server error: " + (e && e.message), true); }
+    return Response.json(out, { headers: PRIVATE });
+  }
+  return new Response("not found", { status: 404, headers: PRIVATE });
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -395,6 +450,15 @@ export default {
         return new Response("not found", { status: 404 });
       }
       return handleMcp(request, stub);
+    }
+
+    if (parts[1] === "app") {
+      if (!env.MCP_SECRET || !safeEqual(parts[2] || "", env.MCP_SECRET) || parts.length > 4) {
+        return new Response("not found", { status: 404 });
+      }
+      const base = "/app/" + parts[2] + "/";
+      if (parts.length === 3) return Response.redirect(url.origin + base, 301);  // relative links need the slash
+      return handleApp(request, stub, parts[3], base);
     }
 
     if (url.pathname === "/") return new Response("Unicorn cloud is running.\n");

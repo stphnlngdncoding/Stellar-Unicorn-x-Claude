@@ -43,6 +43,9 @@ echo " Connector URL (add it to Claude as a custom connector):"
 echo "   $URL/mcp/$MCP_SECRET"
 echo
 echo " Board settings written to board/_cloud.json; copy that file to the board."
+echo
+echo " Unicorn Remote phone app (open in Safari, Share, Add to Home Screen):"
+echo "   $URL/app/$MCP_SECRET/"
 echo "================================================================"
 echo "Both are git-ignored. Keep the connector URL private: anyone with it"
 echo "can control your board."
