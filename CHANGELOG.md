@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.3.2: opening Settings no longer crashes the Galactic (2026-11-05)
+
+- **Launcher v6.3.2.** Opening Settings for a big program (the spaceship, the world map) reads the program's whole source from the board. On the Galactic that could run out of memory and knock the board offline. Now, for a file over 6 KB, the playing program pauses while the file is read and sent, frees the original copy before encoding it, then picks straight back up (the board keeps reporting it as playing). Boards on 6.3.1 upgrade with `board/upgrades/install_v632.py`.
+
 ## v6.3.1: big uploads on the Galactic, and a roaming spaceship (2026-11-05)
 
 - **Launcher v6.3.1.** After a program had been running a while, the Galactic sometimes couldn't find a big enough block of memory to receive an uploaded program, and the upload was lost. Now, when a cloud message bigger than 6 KB arrives, the playing program is set aside to free its memory, the message is read, and the program picks up again. A plain `MemoryError` now triggers the same recovery as a failed connection (it was being ignored). Boards on 6.3.0 upgrade with `board/upgrades/install_v631.py`.

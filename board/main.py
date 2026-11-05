@@ -39,7 +39,7 @@
 
 import os, sys, time, gc, json, math, machine, micropython
 
-VERSION = "6.3.1"
+VERSION = "6.3.2"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
 BIG_BODY = 6000                 # a cloud message bigger than this: set the program aside to receive it
 LOW_FLASH_KB = 200              # blink a warning border when free storage drops below this
@@ -576,7 +576,7 @@ def launcher():
             "model": BOARD,
             "size": [W, H],
             "ip": st["ip"],
-            "running": st["name"],
+            "running": st["name"] or st.get("sent_park"),   # paused only while a big file goes out
             "asleep": st["asleep"],
             "default": read(DEFAULT_FILE) or None,
             "programs": programs(),
@@ -773,6 +773,12 @@ def launcher():
                     remove(DEFAULT_FILE)
                 res["message"] = "Deleted " + name
             elif ctype == "source":
+                if st["name"] and os.stat(name)[6] > BIG_BODY:
+                    # a big file: set the program aside to make room for reading
+                    # and sending it; it picks up again once it's been sent
+                    st["sent_park"] = st["name"]
+                    stop_program(keep_resume=True)
+                    gc.collect()
                 with open(name) as f:
                     res["message"] = f.read()
             elif ctype == "brightness":
@@ -824,13 +830,30 @@ def launcher():
             ctx.verify_mode = ssl.CERT_NONE
         reader, writer = await asyncio.open_connection(host, port, ssl=ctx)
         try:
-            body = json.dumps(payload).encode()
+            body = json.dumps(payload)
+            for r in payload.get("results") or ():
+                # a big result (a program's source) is now in the body; let go of
+                # the original so there's room to encode it. If this send fails,
+                # the caller gets a note to ask again instead of a second copy.
+                m = r.get("message")
+                if m and len(m) > BIG_BODY:
+                    r["message"] = "That file was too big to send twice; please read it again."
+                    r["ok"] = False
+            m = None
+            gc.collect()
+            body = body.encode()
+            gc.collect()
             head = ("POST %s HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\n"
                     "Content-Type: application/json\r\nContent-Length: %d\r\n"
                     "Connection: close\r\n\r\n") % (SYNC_PATH, host, cfg["token"], len(body))
             writer.write(head.encode())
             writer.write(body)
             await writer.drain()
+            body = None
+            back = st.pop("sent_park", None)              # a big file's gone: carry on now
+            if back and st["name"] is None and (st["what"] or st["list"]) and exists(back):
+                gc.collect()
+                start_program(back, managed=True)
             done_loading()
             code = int((await reader.readline()).split()[1])
             length, chunked = None, False
@@ -914,6 +937,9 @@ def launcher():
                 if parked and st["name"] is None and exists(parked):
                     start_program(parked, managed=True)
                 parked = None
+                back = st.pop("sent_park", None)          # a big file's been sent: carry on
+                if back and st["name"] is None and (st["what"] or st["list"]) and exists(back):
+                    start_program(back, managed=True)
                 st["cloud"] = "ok (blocking)" if use_blocking else "ok"
                 done_loading()
                 started = st["start"]
@@ -934,7 +960,7 @@ def launcher():
             except Exception as e:
                 st["cloud"] = "error: " + repr(e)
                 print("Cloud check-in failed:", repr(e))
-                back = st.pop("parked", None)
+                back = st.pop("parked", None) or st.pop("sent_park", None)
                 if back and st["name"] is None and exists(back):
                     start_program(back, managed=True)
                 if isinstance(e, MemoryError) or (isinstance(e, OSError) and e.args and e.args[0] == 12):

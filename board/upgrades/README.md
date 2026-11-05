@@ -13,5 +13,6 @@ for, it changes nothing and shows a red cross.
 | `install_v612.py` | 6.1.1 → 6.1.2 | Blinks an orange border every 45 seconds when free storage drops below 200 KB. Backup: `main_v611.py`. |
 | `install_v613.py` | 6.1.2 → 6.1.3 | Starts the board at full brightness instead of half. Backup: `main_v612.py`. |
 | `install_v631.py` | 6.3.0 → 6.3.1 | Sets the running program aside while a big cloud message (an uploaded program) is received, then resumes it; plain out-of-memory errors trigger the usual recovery. For the Galactic. Backup: `main_v630.py`. |
+| `install_v632.py` | 6.3.1 → 6.3.2 | Reading a big program's source (the Remote's Settings does this) no longer runs the Galactic out of memory: the program pauses while the file is read and sent, then carries on. Backup: `main_v631.py`. |
 
 To roll back, rename the backup to `main.py` in Thonny.
