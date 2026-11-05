@@ -39,7 +39,7 @@ SKY_MID = (14, 8, 36)
 SKY_LOW = (46, 14, 40)
 
 def setup(su, g):
-    global W, H, SKY, CLOUDPEN, STARPEN, PEN, cache, planes, clouds, stars, a_was, frames
+    global W, H, SKY, CLOUDPEN, STARPEN, PEN, planes, clouds, stars, a_was, frames
     W, H = su.WIDTH, su.HEIGHT
     SKY = []
     sky_rgb = []
@@ -69,7 +69,6 @@ def setup(su, g):
                 for c in range(3):
                     m = DEPTH_BRIGHT[d] * SHADE[s] * COVER[c]
                     PEN.append(g.create_pen(int(r * m), int(gg * m), int(b * m)))
-    cache = {}
     planes = []
     for i in range(PLANES):
         planes.append(new_plane(random.uniform(-MARGIN, W + MARGIN), i % 2))
@@ -113,50 +112,48 @@ SHAPES = {
 }
 SHADE_OF = {"W": 0, "K": 1, "F": 2}
 
+# Each plane sprite, worked out ahead of time for every size and heading
+# (key = size * HEADINGS + heading): bytes of (dx + 8, dy + 8, shade * 3 + cover).
+# Baked in so the board never builds them mid-animation, which fragmented
+# its memory. Re-bake with tools in the repo history if SHAPES/SIZES change.
+SPRITES = {
+    96: b'\x07\x07\x02\x08\x07\x02\x07\x08\x08\x08\x08\x08\t\x08\x02',
+    97: b'\x07\x07\x02\x08\x07\x02\x07\x08\x08\x08\x08\x08\t\x08\x02',
+    98: b'\x07\x07\x01\x08\x07\x02\t\x07\x00\x07\x08\x07\x08\x08\x08\t\x08\x01\t\t\x00',
+    99: b'\x08\x06\x00\x07\x07\x07\x08\x07\x02\t\x07\x01\x07\x08\x06\x08\x08\x08\t\x08\x01\t\t\x01',
+    100: b'\x08\x06\x00\x07\x07\x07\x08\x07\x02\t\x07\x01\x07\x08\x06\x08\x08\x08\t\x08\x01\x08\t\x00\t\t\x01',
+    101: b'\x08\x06\x00\x07\x07\x07\x08\x07\x02\t\x07\x01\x08\x08\x08\t\x08\x01\x08\t\x00\t\t\x01',
+    102: b'\x07\x07\x06\x08\x07\x08\t\x07\x01\x08\x08\x08\t\x08\x01\x08\t\x01\t\t\x00',
+    103: b'\x08\x07\x08\t\x07\x02\x08\x08\x08\t\x08\x02\x08\t\x02',
+    104: b'\x08\x07\x08\t\x07\x02\x08\x08\x08\t\x08\x02\x08\t\x02',
+    105: b'\x08\x07\x08\t\x07\x02\x08\x08\x08\t\x08\x02\x08\t\x02',
+    106: b'\x08\x07\x07\t\x07\x01\x08\x08\x08\t\x08\x02\x07\t\x00\x08\t\x01\t\t\x00',
+    107: b'\x08\x07\x06\t\x07\x07\x08\x08\x08\t\x08\x02\n\x08\x00\x07\t\x01\x08\t\x01\t\t\x01',
+    108: b'\x08\x07\x06\t\x07\x07\x07\x08\x00\x08\x08\x08\t\x08\x02\n\x08\x00\x07\t\x01\x08\t\x01\t\t\x01',
+    109: b'\t\x07\x07\x07\x08\x00\x08\x08\x08\t\x08\x02\n\x08\x00\x07\t\x01\x08\t\x01\t\t\x01',
+    110: b'\t\x07\x06\x07\x08\x01\x08\x08\x08\t\x08\x08\x07\t\x00\x08\t\x01\t\t\x01',
+    111: b'\x07\x08\x02\x08\x08\x08\t\x08\x08\x08\t\x02\t\t\x02',
+    112: b'\x07\x08\x02\x08\x08\x08\t\x08\x08\x08\t\x02\t\t\x02',
+    113: b'\x07\x08\x02\x08\x08\x08\t\x08\x08\x08\t\x02\t\t\x02',
+    114: b'\x07\x07\x00\x07\x08\x01\x08\x08\x08\t\x08\x07\x07\t\x00\x08\t\x02\t\t\x01',
+    115: b'\x07\x07\x01\x07\x08\x01\x08\x08\x08\t\x08\x06\x07\t\x01\x08\t\x02\t\t\x07\x08\n\x00',
+    116: b'\x07\x07\x01\x08\x07\x00\x07\x08\x01\x08\x08\x08\t\x08\x06\x07\t\x01\x08\t\x02\t\t\x07\x08\n\x00',
+    117: b'\x07\x07\x01\x08\x07\x00\x07\x08\x01\x08\x08\x08\x07\t\x01\x08\t\x02\t\t\x07\x08\n\x00',
+    118: b'\x07\x07\x00\x08\x07\x01\x07\x08\x01\x08\x08\x08\x07\t\x01\x08\t\x08\t\t\x06',
+    119: b'\x08\x07\x02\x07\x08\x02\x08\x08\x08\x07\t\x02\x08\t\x08',
+    120: b'\x08\x07\x02\x07\x08\x02\x08\x08\x08\x07\t\x02\x08\t\x08',
+    121: b'\x08\x07\x02\x07\x08\x02\x08\x08\x08\x07\t\x02\x08\t\x08',
+    122: b'\x07\x07\x00\x08\x07\x01\t\x07\x00\x07\x08\x02\x08\x08\x08\x07\t\x01\x08\t\x07',
+    123: b'\x07\x07\x01\x08\x07\x01\t\x07\x01\x06\x08\x00\x07\x08\x02\x08\x08\x08\x07\t\x07\x08\t\x06',
+    124: b'\x07\x07\x01\x08\x07\x01\t\x07\x01\x06\x08\x00\x07\x08\x02\x08\x08\x08\t\x08\x00\x07\t\x07\x08\t\x06',
+    125: b'\x07\x07\x01\x08\x07\x01\t\x07\x01\x06\x08\x00\x07\x08\x02\x08\x08\x08\t\x08\x00\x07\t\x07',
+    126: b'\x07\x07\x01\x08\x07\x01\t\x07\x00\x07\x08\x08\x08\x08\x08\t\x08\x01\x07\t\x06',
+    127: b'\x07\x07\x02\x08\x07\x02\x07\x08\x08\x08\x08\x08\t\x08\x02',
+}
+
 def sprite(size, h):
-    """bytes of (dx + 8, dy + 8, shade * 3 + cover) for one size and heading."""
-    key = size * HEADINGS + h
-    s = cache.get(key)
-    if s is not None:
-        return s
-    rows = SHAPES[size]
-    bw = len(rows[0])
-    bh = len(rows)
-    cw = bw // 2 + 0.5
-    ch = bh // 2 + 0.5
-    a = h * TAU / HEADINGS
-    ca = math.cos(a)
-    sa = math.sin(a)
-    R = size // 2 + 2
-    out = bytearray()
-    for py in range(-R, R + 1):
-        for px in range(-R, R + 1):
-            cnt = [0, 0, 0]
-            for sy in (-0.3, 0.0, 0.3):
-                Y = py + sy
-                for sx in (-0.3, 0.0, 0.3):
-                    X = px + sx
-                    j = int(math.floor(X * ca + Y * sa + cw))
-                    i = int(math.floor(-X * sa + Y * ca + ch))
-                    if 0 <= i < bh and 0 <= j < bw:
-                        c = rows[i][j]
-                        if c != " ":
-                            cnt[SHADE_OF[c]] += 1
-            n = cnt[0] + cnt[1] + cnt[2]
-            if n < 3:
-                continue
-            sh = 0
-            if cnt[1] > cnt[sh]:
-                sh = 1
-            if cnt[2] >= cnt[sh]:
-                sh = 2
-            cov = 0 if n < 5 else (1 if n < 8 else 2)
-            out.append(px + 8)
-            out.append(py + 8)
-            out.append(sh * 3 + cov)
-    s = bytes(out)
-    cache[key] = s
-    return s
+    """The baked sprite for one size and heading."""
+    return SPRITES[size * HEADINGS + h]
 
 def draw_plane(g, p, glide, t):
     d = p[3]
