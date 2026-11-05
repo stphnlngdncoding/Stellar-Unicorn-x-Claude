@@ -23,8 +23,8 @@ LOOP_S = (10, 30)    # seconds between loops for each crane (min, max)
 STARS = 12           # faint twinkling stars
 
 SIZES = (3, 4, 5)            # sprite width for far, middle and near cranes
-DEPTH_BRIGHT = (0.55, 0.75, 0.95)
-DEPTH_HAZE = (0.45, 0.2, 0.0)   # far cranes fade toward the night haze colour
+DEPTH_BRIGHT = (0.6, 0.78, 0.95)
+DEPTH_HAZE = (0.4, 0.18, 0.0)   # far cranes fade toward the night haze colour
 HAZE = (110, 125, 190)
 DEPTH_SPEED = (0.5, 0.72, 1.0)
 DEPTH_BOB = (0.3, 0.4, 0.55)
@@ -47,10 +47,10 @@ SHAPES = {
     3: (("...", "n.d", ".bb"),
         ("...", "...", "nbb"),
         ("...", "...", ".bb", "n.d")),
-    4: ((".nd.", ".n.b", "b..b", ".bb."),
+    4: (("n...", ".nd.", "b.nb", ".bb."),
         ("....", "...b", "bndb", ".bb."),
         ("....", "...b", "b..b", ".db.", ".n..")),
-    5: ((".n...", ".nd.b", "b.n.b", ".bbb."),
+    5: (("nd...", ".nd.b", "b..nb", ".bbb."),
         (".....", "....b", "b.d.b", ".bnb."),
         (".....", "....b", "b...b", ".bdb.", "..n..", ".n...")),
 }
@@ -95,9 +95,15 @@ def setup(su, g):
                             out.append(SHADE_OF[c])
                 lst.append(bytes(out))
         SPR.append(lst)
+    global tint_next
+    tint_next = random.randrange(len(TINTS))
     cranes = []
     for i in range(CRANES):
-        cranes.append(new_crane(random.uniform(-MARGIN, W + MARGIN), i % 3))
+        # spread the starting flock along the diagonal so it begins loose
+        k = (i + random.uniform(0.1, 0.9)) / CRANES
+        c = new_crane(-MARGIN + k * (W + 2 * MARGIN), i % 3)
+        c[1] = (k * 2.7 + random.uniform(0, 0.25)) % 1.0 * (H + 2 * VMARGIN) - VMARGIN
+        cranes.append(c)
     cranes.sort(key=lambda c: c[2])
     stars = []
     for i in range(STARS):
@@ -113,7 +119,9 @@ def new_crane(x, depth=None):
     #  14 own speed factor, 15 facing left?]
     if depth is None:
         depth = random.randrange(3)
-    return [x, random.uniform(-1, H), depth, random.randrange(len(TINTS)),
+    global tint_next
+    tint_next = (tint_next + 1 + random.getrandbits(1)) % len(TINTS)
+    return [x, random.uniform(-1, H), depth, tint_next,
             random.random(), random.uniform(0.75, 1.3), random.getrandbits(1),
             random.uniform(0.5, 3.0), random.uniform(0, TAU), random.uniform(0.7, 1.4),
             -1.0, 3.0, random.uniform(LOOP_S[0] * 0.3, LOOP_S[1]), 0.0,
@@ -180,18 +188,20 @@ def fly(c, dt, dirx, diry):
         c[1] -= H + 2 * VMARGIN
 
 def spread(dt):
-    # keep the flock loose: cranes at the same depth drift apart vertically
+    # keep the flock loose: cranes that overlap drift apart vertically
+    # (gently if they're at different depths, so near ones can still pass)
     n = len(cranes)
     for i in range(n):
         a = cranes[i]
         for j in range(i + 1, n):
             b = cranes[j]
-            if a[2] != b[2]:
-                continue
+            gap = (SIZES[a[2]] + SIZES[b[2]]) * 0.5 + 1
             dx = b[0] - a[0]
             dy = b[1] - a[1]
-            if -SIZES[a[2]] - 1 < dx < SIZES[a[2]] + 1 and -5 < dy < 5:
-                push = (1.2 if dy >= 0 else -1.2) * dt
+            if -gap < dx < gap and -5 < dy < 5:
+                push = (1.2 if a[2] == b[2] else 0.6) * dt
+                if dy < 0:
+                    push = -push
                 a[1] -= push
                 b[1] += push
 

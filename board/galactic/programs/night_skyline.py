@@ -11,6 +11,7 @@
 # remade every ten minutes as its phase creeps on), nothing is built per frame.
 import math
 import random
+from array import array
 from galactic import GalacticUnicorn
 
 PAN_SPEED = 0.5      # how fast the panorama drifts past, pixels a second (0 = still)
@@ -47,7 +48,7 @@ def setup(su, g):
     wallc = bytearray(LEN)
     bias = bytearray(LEN)
     win = bytearray(LEN * H)          # 0 wall, 1 dark window, 2.. lit (tint + 2)
-    wins = list(range(LEN * H))       # indexes of the windows (first nwin used)
+    wins = array("H", range(LEN * H))  # indexes of the windows (first nwin used)
     nwin = 0
     btop = bytearray(LEN)             # the far-off skyline
     bdot = bytearray(LEN * H)

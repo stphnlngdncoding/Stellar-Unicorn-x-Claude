@@ -14,7 +14,7 @@ import random
 from stellar import StellarUnicorn
 
 FISH = 3             # fish in the tank at the start
-MAX_FISH = 7         # A adds fish up to this many
+MAX_FISH = 6         # A adds fish up to this many
 SPEED = 1.0          # how fast the fish swim
 BUBBLES = 1.5        # bubbles a second from the bubbler (they come in little bursts)
 SWAY = 1.0           # how far the seaweed sways (0 = still)
@@ -42,7 +42,7 @@ PALS = (
     ((20, 90, 200), (200, 20, 30), (10, 50, 120), (10, 40, 110)),      # neon
     ((200, 30, 30), (240, 120, 90), (120, 15, 15), (100, 10, 20)),     # red
     ((130, 40, 170), (220, 180, 40), (210, 170, 30), (90, 30, 120)),   # purple and yellow
-    ((60, 170, 60), (160, 220, 80), (30, 100, 30), (20, 80, 30)),      # green
+    ((30, 170, 175), (190, 230, 220), (15, 100, 110), (10, 80, 95)),   # teal
     ((220, 90, 140), (250, 170, 190), (150, 50, 90), (120, 40, 80)),   # pink
     ((120, 150, 180), (60, 80, 120), (80, 100, 130), (60, 70, 100)),   # silver
 )
@@ -112,9 +112,9 @@ def setup(su, g):
     x = random.randint(1, 4)
     while x < W - 1:
         if abs(x - BUBX) > 1:
-            weeds.append([x, random.randint(4, H - 5), random.uniform(0, 6.28),
+            weeds.append([x, random.randint(4, H - 6), random.uniform(0, 6.28),
                           random.random() < 0.4, random.random() < 0.5, random.getrandbits(1)])
-        x += random.randint(2, 5)
+        x += random.randint(3, 6)
     BUBP = (g.create_pen(60, 120, 160), g.create_pen(110, 180, 220))
     AIRP = g.create_pen(3, 5, 10)
     SURFP = [g.create_pen(20 + 25 * v, 70 + 35 * v, 100 + 35 * v) for v in range(4)]
