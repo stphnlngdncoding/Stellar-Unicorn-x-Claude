@@ -39,8 +39,9 @@
 
 import os, sys, time, gc, json, math, machine, micropython
 
-VERSION = "6.3.0"
+VERSION = "6.3.1"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
+BIG_BODY = 6000                 # a cloud message bigger than this: set the program aside to receive it
 LOW_FLASH_KB = 200              # blink a warning border when free storage drops below this
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
 SELF_RESET = "_self_reset"       # set just before a deliberate self-heal restart
@@ -843,6 +844,12 @@ def launcher():
                     length = int(v)
                 elif k == "transfer-encoding" and "chunked" in v.lower():
                     chunked = True
+            if length is not None and length > BIG_BODY and st["name"]:
+                # a big message (an uploaded program): free the running program's
+                # memory so there's room to receive it, and pick it up again after
+                st["parked"] = st["name"]
+                stop_program(keep_resume=True)
+                gc.collect()
             data = await read_body(reader, length, chunked)
         finally:
             writer.close()
@@ -913,6 +920,9 @@ def launcher():
                 for cmd in reply.get("commands", []):
                     results.append(execute(cmd))
                     await asyncio.sleep(0)
+                back = st.pop("parked", None)
+                if back and st["name"] is None and (st["what"] or st["list"]) and exists(back):
+                    start_program(back, managed=True)
                 if st["env"] is not None and st["start"] != started and not use_blocking:
                     st["loading"] = time.ticks_add(time.ticks_ms(), 6000)
                 if results:
@@ -924,7 +934,10 @@ def launcher():
             except Exception as e:
                 st["cloud"] = "error: " + repr(e)
                 print("Cloud check-in failed:", repr(e))
-                if isinstance(e, OSError) and e.args and e.args[0] == 12:
+                back = st.pop("parked", None)
+                if back and st["name"] is None and exists(back):
+                    start_program(back, managed=True)
+                if isinstance(e, MemoryError) or (isinstance(e, OSError) and e.args and e.args[0] == 12):
                     # out of memory for the secure connection: pause the animation,
                     # and if that isn't enough, stop the program until we're connected
                     if mem_failures == 0:

@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.3.1: big uploads on the Galactic, and a roaming spaceship (2026-11-05)
+
+- **Launcher v6.3.1.** After a program had been running a while, the Galactic sometimes couldn't find a big enough block of memory to receive an uploaded program, and the upload was lost. Now, when a cloud message bigger than 6 KB arrives, the playing program is set aside to free its memory, the message is read, and the program picks up again. A plain `MemoryError` now triggers the same recovery as a failed connection (it was being ignored). Boards on 6.3.0 upgrade with `board/upgrades/install_v631.py`.
+- **Galactic spaceship roams the whole strip**: it flies to far-off spots (columns 2 to 44, up from 3 to 22) with easing in and out, lingers a moment (`ROAM_S`), then heads somewhere new, changing height as it goes; it eases off going forwards while dodging.
+
 ## Screensavers (2026-11-05)
 
 - **Seven retro screensavers for both boards**, each designed for its board's shape: **Night Skyline** (city windows switching on and off under the stars, real moon phase, blinking planes; the Galactic pans along a long skyline), **Aquarium** (fish turning and bobbing, bubbles, swaying seaweed, the odd jellyfish), **Paper Cranes** (a flock of origami cranes flapping across the night), **Paper Planes** (gliding, looping and swooping through a dusk sky), **Ribbons** (bouncing line shapes with fading rainbow trails), **Pipeworks** (shiny pipes growing until the screen fills, then dissolving), and **Bouncing Clock** (the time drifting around, changing colour at each edge, with a rainbow on a corner hit). All have Settings in the Remote, under a new Screensavers group.
