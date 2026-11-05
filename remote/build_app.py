@@ -46,7 +46,7 @@ button,.tile,.chip,input[type=range]{touch-action:manipulation}
 
 CALL_OLD = """  async function call(tool, input) {
     if (!mcp) throw { code: "capability_disabled" };
-    return mcp.callTool(SERVER, tool, input || {}, { cache: false });
+    return mcp.callTool(SERVER, tool, Object.assign({}, input || {}, { board: BOARD }), { cache: false });
   }"""
 CALL_NEW = """  let reauthing = false;
   function reauth() { if (reauthing) return; reauthing = true; setTimeout(() => location.reload(), 900); }
@@ -55,7 +55,7 @@ CALL_NEW = """  let reauthing = false;
     let r;
     try {
       r = await fetch("api", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
-        redirect: "manual", body: JSON.stringify({ tool, args: input || {} }) });
+        redirect: "manual", body: JSON.stringify({ tool, args: Object.assign({}, input || {}, { board: BOARD }) }) });
     } catch (e) { throw { code: "network" }; }
     // Cloudflare Access in front and the sign-in ran out: reload so it can ask again
     if (r.type === "opaqueredirect" || r.status === 401 || r.status === 403) { reauth(); throw { code: "signin" }; }

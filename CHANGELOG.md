@@ -5,6 +5,12 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Galactic programs and the board switcher (2026-11-05)
+
+- **All 34 programs reworked for the Galactic's 53×11 strip** in `board/galactic/programs/` (the repo's 30 plus Adventure, Fire, Supercomputer and Today from the board, which are now `setup`/`frame` programs, plus a playlist `rotation.py` and a `wide_rainbow.py` test). Scenes became panoramas (World's sun and moon cross the whole strip, the boat sails along a long sea, a long ant farm), ambient fields are stretched to the wide shape (with new `STRETCH`/`OVAL`/`WIDE` settings), Tetris falls sideways, Snake's autopilot now plans around its own tail, Life v2 has six new mirror-symmetric still lifes found for 53×11, and Mirror Life reflects about the middle column. Each was soak-tested in the simulator with every setting at both ends.
+- **Board switcher in the Unicorn Remote** (artifact and phone app): Stellar / Galactic at the top, with a dot for whether each is online. Everything on the page (programs, now playing, settings, rotation, marquee) follows the chosen board, and it remembers your choice. On the Galactic, Now playing shows a wide strip.
+- Settings for both boards are built from `remote/tune_spec.json` and `remote/tune_spec_galactic.json` by `remote/build_data.py`, which also refreshes the Marquee template and rebuilds the phone app. The local (`local/`) Remote stays Stellar-only.
+
 ## v6.3.0: Galactic Unicorn support (2026-11-05)
 
 - **One launcher for both boards.** `board/main.py` checks whether it's on Stellar (16×16) or Galactic (53×11) firmware and sizes its spinner, messages and warnings to fit. On the Galactic it uses the hostname `galactic` and checks in at `/board/sync?board=galactic`. Status reports `model` and `size`.

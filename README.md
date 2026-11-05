@@ -42,7 +42,7 @@ After setup the board only needs USB power. Prefer to do it by hand? See [manual
 
 ### A second board: Galactic Unicorn
 
-The same launcher, cloud and connector also run a [Galactic Unicorn](https://shop.pimoroni.com/products/space-unicorns) (53×11). `board/main.py` notices which board it's on, and the Galactic checks in with the same token, so there's nothing new to deploy or add in claude.ai: every connector tool takes `board: "galactic"`. See [adding a Galactic](GUIDE.md#adding-a-galactic-unicorn). Programs for it live in `board/galactic/programs/`.
+The same launcher, cloud and connector also run a [Galactic Unicorn](https://shop.pimoroni.com/products/space-unicorns) (53×11). `board/main.py` notices which board it's on, and the Galactic checks in with the same token, so there's nothing new to deploy or add in claude.ai: every connector tool takes `board: "galactic"`. See [adding a Galactic](GUIDE.md#adding-a-galactic-unicorn). Programs for it live in `board/galactic/programs/`: every Stellar program, reworked for the wide strip. The Unicorn Remote has a Stellar / Galactic switcher.
 
 ### The Remote on your iPhone
 
