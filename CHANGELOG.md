@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## Screensavers (2026-11-05)
+
+- **Seven retro screensavers for both boards**, each designed for its board's shape: **Night Skyline** (city windows switching on and off under the stars, real moon phase, blinking planes; the Galactic pans along a long skyline), **Aquarium** (fish turning and bobbing, bubbles, swaying seaweed, the odd jellyfish), **Paper Cranes** (a flock of origami cranes flapping across the night), **Paper Planes** (gliding, looping and swooping through a dusk sky), **Ribbons** (bouncing line shapes with fading rainbow trails), **Pipeworks** (shiny pipes growing until the screen fills, then dissolving), and **Bouncing Clock** (the time drifting around, changing colour at each edge, with a rainbow on a corner hit). All have Settings in the Remote, under a new Screensavers group.
+
 ## Galactic programs and the board switcher (2026-11-05)
 
 - **All 34 programs reworked for the Galactic's 53×11 strip** in `board/galactic/programs/` (the repo's 30 plus Adventure, Fire, Supercomputer and Today from the board, which are now `setup`/`frame` programs, plus a playlist `rotation.py` and a `wide_rainbow.py` test). Scenes became panoramas (World's sun and moon cross the whole strip, the boat sails along a long sea, a long ant farm), ambient fields are stretched to the wide shape (with new `STRETCH`/`OVAL`/`WIDE` settings), Tetris falls sideways, Snake's autopilot now plans around its own tail, Life v2 has six new mirror-symmetric still lifes found for 53×11, and Mirror Life reflects about the middle column. Each was soak-tested in the simulator with every setting at both ends.
