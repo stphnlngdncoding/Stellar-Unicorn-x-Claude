@@ -8,6 +8,7 @@ See "Versions and rolling back" in the README.
 ## v6.3.1: big uploads on the Galactic, and a roaming spaceship (2026-11-05)
 
 - **Launcher v6.3.1.** After a program had been running a while, the Galactic sometimes couldn't find a big enough block of memory to receive an uploaded program, and the upload was lost. Now, when a cloud message bigger than 6 KB arrives, the playing program is set aside to free its memory, the message is read, and the program picks up again. A plain `MemoryError` now triggers the same recovery as a failed connection (it was being ignored). Boards on 6.3.0 upgrade with `board/upgrades/install_v631.py`.
+- **The spaceship shoots at the flying saucer** (both boards): once a saucer is hovering ahead, the ship fires little glowing bullets at it with a slightly wobbly aim; each hit makes the saucer flash white and throw sparks, and enough hits (`HITS`) burst it into a shower of sparks. Roughly half to two-thirds of saucers get knocked out; the rest escape. New Settings: shoot or not, seconds between shots, hits needed, aim wobble, bullet speed.
 - **Galactic spaceship roams the whole strip**: it flies to far-off spots (columns 2 to 44, up from 3 to 22) with easing in and out, lingers a moment (`ROAM_S`), then heads somewhere new, changing height as it goes; it eases off going forwards while dodging.
 
 ## Screensavers (2026-11-05)

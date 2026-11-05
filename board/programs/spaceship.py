@@ -10,6 +10,8 @@
 # shines a tractor beam down, then zips off up and away; the ship gives it
 # a wide berth.
 #   A = send an asteroid   B = next planet   C = call the flying saucer
+# When a saucer comes in, the ship shoots little bullets at it; a few hits
+# and it bursts into sparks.
 #
 # Memory-friendly: each planet is drawn into a small bytearray mask once when
 # it appears; asteroids come from a fixed pool; positions are integers
@@ -35,6 +37,11 @@ UFO_S = (25, 70)     # seconds between flying saucer visits (min, max)
 UFO_SPEED = 5.0      # how fast the saucer glides in, pixels a second
 UFO_HOVER = (2.0, 5.0)  # seconds it hovers before zipping off (min, max)
 BEAM = 0.6           # chance it shines its tractor beam while hovering
+SHOOT = 1            # 1 = the ship shoots at saucers, 0 = leaves them be
+FIRE_S = 0.45        # seconds between shots
+HITS = 5             # hits to knock a saucer out
+AIM = 1.2            # how much the aim wobbles (px); some shots miss
+BULLET_SPEED = 14.0    # how fast bullets fly, pixels a second
 FRAME = 0.04
 
 # star layers: (count, speed in px/s, brightness 0..255)
@@ -65,6 +72,7 @@ def setup(su, g):
     BEAMPEN = (g.create_pen(90, 200, 120), g.create_pen(50, 125, 75), g.create_pen(25, 65, 40))
     ufo = None
     next_ufo = random.uniform(8, 20)      # the first visit comes fairly soon
+    shoot_setup(su, g)
     c_was = False
     stars = []
     for li, (n, sp, b) in enumerate(LAYERS):
@@ -343,6 +351,121 @@ def beaming():
     u = ufo
     return u[2] == "hover" and 0 < u[10] <= last_t < u[11]
 
+# ---------------------------------------------------------------- shooting
+# When a saucer comes in ahead, the ship fires little bullets at it, aimed at
+# where it is. Each hit makes it flash and throws a few sparks; after HITS
+# hits it bursts into a shower of sparks and is gone until its next visit.
+def shoot_setup(su, g):
+    global BULLETS, SPARKS, BULLETPEN, SPARKPEN, FLASHPEN, next_shot, ufo_hits, ufo_flash, SW, SH
+    SW, SH = su.WIDTH, su.HEIGHT
+    BULLETS = [[0.0, 0.0, 0.0, 0.0, False] for _ in range(8)]      # x, y, vx, vy, flying
+    SPARKS = [[0.0, 0.0, 0.0, 0.0, 0, 0] for _ in range(24)]       # x, y, vx, vy, frames left, colour
+    BULLETPEN = (g.create_pen(255, 250, 170), g.create_pen(255, 120, 20))
+    SPARKPEN = [[g.create_pen(r * v // 4, gg * v // 4, b * v // 4) for v in range(1, 5)]
+                for r, gg, b in ((255, 240, 120), (255, 120, 30), (120, 255, 200), (255, 80, 200), (255, 255, 255))]
+    FLASHPEN = g.create_pen(255, 255, 255)
+    next_shot = 0.0
+    ufo_hits = 0
+    ufo_flash = 0
+
+def spark(x, y, n, colours, speed):
+    for s in SPARKS:
+        if n <= 0:
+            break
+        if s[4] <= 0:
+            a = random.uniform(0, 6.283)
+            v = random.uniform(0.3, 1.0) * speed
+            s[0] = x
+            s[1] = y
+            s[2] = math.cos(a) * v
+            s[3] = math.sin(a) * v * 0.7
+            s[4] = random.randint(8, 20)
+            s[5] = random.choice(colours)
+            n -= 1
+
+def shooting(t, dt, sx, sy):
+    global next_shot, ufo_hits, ufo_flash, ufo, next_ufo
+    u = ufo
+    if u is None:
+        ufo_hits = 0
+    elif SHOOT and u[2] == "hover" and t >= next_shot:
+        nx = sx + 5                            # from the nose
+        ny = sy + 1
+        dx = u[0] + 3.5 - nx
+        dy = u[1] + 1.5 - ny + random.uniform(-AIM, AIM)
+        if 0 < dx < SW * 0.85 and abs(dy) < 2 * dx + 4:   # ahead of the ship, or up ahead
+            for b in BULLETS:
+                if not b[4]:
+                    d = math.sqrt(dx * dx + dy * dy)
+                    b[0] = nx
+                    b[1] = ny
+                    b[2] = dx / d * BULLET_SPEED
+                    b[3] = dy / d * BULLET_SPEED
+                    b[4] = True
+                    break
+            next_shot = t + FIRE_S * random.uniform(0.8, 1.25)
+    for b in BULLETS:
+        if not b[4]:
+            continue
+        b[0] += b[2] * dt
+        b[1] += b[3] * dt
+        if b[0] < -1 or b[0] > SW or b[1] < -1 or b[1] > SH:
+            b[4] = False
+            continue
+        u = ufo
+        if u is not None:
+            ux = int(u[0] + 0.5)
+            uy = int(u[1] + 0.5)
+            bx = int(b[0] + 0.5)
+            by = int(b[1] + 0.5)
+            if ux <= bx <= ux + 6 and uy <= by <= uy + 3:
+                b[4] = False
+                ufo_hits += 1
+                ufo_flash = 4
+                spark(b[0], b[1], 3, (0, 1), 6)
+                if ufo_hits >= HITS:
+                    spark(u[0] + 3.5, u[1] + 1.5, 20, (0, 1, 2, 3, 4), 9)
+                    ufo = None
+                    ufo_hits = 0
+                    next_ufo = t + random.uniform(*UFO_S)
+    for s in SPARKS:
+        if s[4] > 0:
+            s[0] += s[2] * dt
+            s[1] += s[3] * dt
+            s[3] += 3 * dt                     # sparks sag a little as they fade
+            s[2] *= 0.97
+            s[4] -= 1
+
+def draw_shots(g):
+    global ufo_flash
+    if ufo_flash and ufo is not None:          # a hit: the saucer flashes white
+        ufo_flash -= 1
+        x = int(ufo[0] + 0.5)
+        y = int(ufo[1] + 0.5)
+        g.set_pen(FLASHPEN)
+        for i, j in ((2, 0), (3, 0), (4, 0), (1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (0, 2), (6, 2), (3, 2)):
+            if 0 <= x + i < SW and 0 <= y + j < SH:
+                g.pixel(x + i, y + j)
+    for b in BULLETS:
+        if b[4]:
+            x = int(b[0] + 0.5)
+            y = int(b[1] + 0.5)
+            tx = int(b[0] - b[2] / BULLET_SPEED + 0.5)     # a short glowing tail
+            ty = int(b[1] - b[3] / BULLET_SPEED + 0.5)
+            if 0 <= tx < SW and 0 <= ty < SH:
+                g.set_pen(BULLETPEN[1])
+                g.pixel(tx, ty)
+            if 0 <= x < SW and 0 <= y < SH:
+                g.set_pen(BULLETPEN[0])
+                g.pixel(x, y)
+    for s in SPARKS:
+        if s[4] > 0:
+            x = int(s[0] + 0.5)
+            y = int(s[1] + 0.5)
+            if 0 <= x < SW and 0 <= y < SH:
+                g.set_pen(SPARKPEN[s[5]][3 if s[4] > 12 else s[4] // 4])
+                g.pixel(x, y)
+
 def draw_ufo(g, t):
     u = ufo
     x = int(u[0] + 0.5)
@@ -446,7 +569,9 @@ def frame(su, g, t):
     if t >= next_drift:
         target_x = random.randint(DRIFT[0], DRIFT[1]) << 8
         next_drift = t + random.uniform(3, 9)
-    stepx = int(DRIFT_SPEED * dt * 256) or 1
+    if SHOOT and ufo is not None and ufo[2] != "out":
+        target_x = 0                           # fall back to take aim at a saucer
+    stepx = int((DRIFT_SPEED * 3 if SHOOT and ufo is not None else DRIFT_SPEED) * dt * 256) or 1
     if ship_x < target_x:
         ship_x = min(target_x, ship_x + stepx)
     elif ship_x > target_x:
@@ -484,6 +609,8 @@ def frame(su, g, t):
         ship_y = max(target_y, ship_y - step)
     sy = (ship_y + 128) >> 8
 
+    shooting(t, dt, sx, sy)
+
     # did anything hit? (the shield takes it)
     for r in rocks:
         if r[4]:
@@ -514,6 +641,7 @@ def frame(su, g, t):
             halo(g, sx + x, sy + y)
     if ufo is not None:
         draw_ufo(g, t)
+    draw_shots(g)
     # engine flame flickers
     fl = random.getrandbits(2)
     g.set_pen(FLAME[0])
