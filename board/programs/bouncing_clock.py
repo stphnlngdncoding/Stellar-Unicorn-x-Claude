@@ -1,6 +1,6 @@
 # Bouncing Clock: the time drifts slowly round the dark board like an old
 # bouncing-logo screensaver, hours stacked over minutes in tiny hand-drawn
-# 3x5 digits, with two dots between them that blink each second. Every time
+# 3x5 digits, with two dots between them (a colon on its side) that blink each second. Every time
 # it touches an edge it changes colour, leaving a faint fading trail behind;
 # land it exactly in a corner and it flashes through the rainbow.
 #   A = switch between 12-hour and 24-hour time
@@ -10,7 +10,7 @@
 from stellar import StellarUnicorn
 
 TWELVE_HOUR = 1      # 1 = 12-hour time, 0 = 24-hour
-SPEED = (2.0, 1.4)   # drift speed across and down, pixels per second
+SPEED = (2.0, 0.9)   # drift speed across and down, pixels per second
 TRAIL = 0.7          # seconds the trail takes to fade
 TRAIL_GLOW = 80      # how bright the trail starts (0 = no trail, 255 = full)
 BRIGHT = 220         # brightness of the digits
@@ -24,7 +24,7 @@ LEVELS = 16          # trail brightness steps
 DIGITS = ((7, 5, 5, 5, 7), (2, 6, 2, 2, 7), (7, 1, 7, 4, 7), (7, 1, 3, 1, 7),
           (5, 5, 7, 1, 1), (7, 4, 7, 1, 7), (7, 4, 7, 5, 7), (7, 1, 1, 2, 2),
           (7, 5, 7, 5, 7), (7, 5, 7, 1, 7))
-BW, BH = 7, 11       # block size: two digits wide, two lines and a gap tall
+BW, BH = 7, 13       # block size: two digits wide; two lines with a 3-row gap for the dots
 
 
 def hsv(h, v):
@@ -46,7 +46,7 @@ def setup(su, g):
     TR = []
     for i in range(HUES):
         r, gg, b = hsv(i / HUES, BRIGHT)
-        PEN.append(g.create_pen(r, gg, b))
+        PEN.append(g.create_pen(r + (BRIGHT - r) // 6, gg + (BRIGHT - gg) // 6, b + (BRIGHT - b) // 6))
         r, gg, b = hsv(i / HUES, TRAIL_GLOW)
         TR.append([g.create_pen(r * v // (LEVELS - 1), gg * v // (LEVELS - 1), b * v // (LEVELS - 1))
                    for v in range(LEVELS)])
@@ -88,10 +88,10 @@ def draw(g, bx, by, top, bot, dots, pen, t, stamp):
                 bits = pat[r]
                 for c in range(3):
                     if bits & (4 >> c):
-                        plot(g, bx + ox + c, by + line * 6 + r, pen, t, stamp)
+                        plot(g, bx + ox + c, by + line * 8 + r, pen, t, stamp)
     if dots:
-        plot(g, bx + 2, by + 5, pen, t, stamp)
-        plot(g, bx + 4, by + 5, pen, t, stamp)
+        plot(g, bx + 2, by + 6, pen, t, stamp)
+        plot(g, bx + 4, by + 6, pen, t, stamp)
 
 
 def plot(g, px, py, pen, t, stamp):

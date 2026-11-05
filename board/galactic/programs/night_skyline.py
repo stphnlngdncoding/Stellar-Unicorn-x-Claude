@@ -14,9 +14,9 @@ import random
 from galactic import GalacticUnicorn
 
 PAN_SPEED = 0.5      # how fast the panorama drifts past, pixels a second (0 = still)
-STARS = 30           # how many stars
+STARS = 36           # how many stars
 TWINKLE = 1.0        # how fast the stars twinkle
-LIT = 0.45           # share of windows lit in the evening (fewer after midnight)
+LIT = 0.55           # share of windows lit in the evening (fewer after midnight)
 WINDOW_RATE = 3.0    # windows switching on or off, per second
 PLANE_S = (15, 45)   # seconds between aeroplanes (min, max)
 SHOOT_S = (25, 75)   # seconds between shooting stars (min, max)
@@ -65,7 +65,7 @@ def setup(su, g):
     BDOTP = (g.create_pen(42, 30, 16), g.create_pen(26, 30, 44))
     TINTP = [g.create_pen(*c) for c in TINTS]
     TVP = [g.create_pen(*c) for c in TV]
-    STARP = [g.create_pen(v * 7, v * 7, v * 10) for v in range(16)]
+    STARP = [g.create_pen(v * 10, v * 10, v * 13) for v in range(16)]
     BEACON = [g.create_pen(v * 14, v, v) for v in range(16)]
     PLANE = (g.create_pen(16, 16, 22), g.create_pen(200, 25, 25), g.create_pen(210, 210, 230))
     SHOOTP = [g.create_pen(v * 13, v * 14, v * 16) for v in range(16)]
@@ -149,7 +149,7 @@ def new_skyline():
         while shade == last:
             shade = random.randrange(len(WALLS))
         last = shade
-        style = random.randrange(3)
+        style = random.choice((0, 1, 2, 2))
         b = random.randrange(len(BIAS))
         stepped = w >= 5 and random.random() < 0.4
         for c in range(x, x + w):
@@ -201,7 +201,7 @@ def make_moon(g, cx, cy, R):
     ang = moon_age() / 29.530588 * 6.283185
     c = math.cos(ang)
     waxing = ang < 3.141593
-    lit_rgb = (205, 200, 165)
+    lit_rgb = (230, 225, 185)
     dark_rgb = (15, 15, 30)
     out = []
     for py in range(int(cy - R - 2), int(cy + R + 3)):
@@ -253,7 +253,7 @@ def frame(su, g, t):
             hr = now()[3]
         except Exception:
             hr = 20
-        lit_now = LIT * (0.55 if hr < 5 else (1.0 if hr >= 17 else 0.8))
+        lit_now = LIT * (0.65 if hr < 5 else (1.0 if hr >= 17 else 0.8))
     # windows switching one by one; settles at lit_now of them on
     toggle_acc += WINDOW_RATE * FRAME
     while toggle_acc >= 1 and nwin:
@@ -335,10 +335,10 @@ def frame(su, g, t):
         shoot_y += shoot_vy * FRAME
         shoot_life -= 1
         fade = min(15, shoot_life * 2)
-        for k in range(5):
-            x = int(shoot_x - shoot_vx * FRAME * k * 0.7)
-            y = int(shoot_y - shoot_vy * FRAME * k * 0.7)
-            v = fade * (5 - k) // 5
+        for k in range(6):
+            x = int(shoot_x - shoot_vx * FRAME * k)
+            y = int(shoot_y - shoot_vy * FRAME * k)
+            v = fade * (6 - k) // 6
             if v > 0 and 0 <= x < W and 0 <= y < H:
                 g.set_pen(SHOOTP[v])
                 g.pixel(x, y)

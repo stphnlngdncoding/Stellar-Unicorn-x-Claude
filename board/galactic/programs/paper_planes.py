@@ -200,7 +200,13 @@ def fly(p, glide, t, dt):
     else:
         p[10] -= dt
         if p[10] <= 0:
-            p[7] = 1 if random.random() < 0.55 else 2
+            # a loop climbs about 5 px, so only loop with room above; a swoop dips
+            if p[1] < 5:
+                p[7] = 2
+            elif p[1] > H - 3:
+                p[7] = 1
+            else:
+                p[7] = 1 if random.random() < 0.55 else 2
             p[8] = 0.0
             p[9] = random.uniform(1.8, 2.6) if p[7] == 1 else random.uniform(1.6, 2.4)
     sp = SPEED * DEPTH_SPEED[p[3]]
