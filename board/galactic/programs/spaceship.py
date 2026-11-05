@@ -27,8 +27,9 @@ ROCK_SPEED = (3.0, 7.0)  # asteroid speed, pixels a second (min, max)
 PLANET_SPEED = 0.5   # how fast planets drift by, pixels a second
 GAP_S = (4, 12)      # seconds of open space between planets (min, max)
 DODGE_SPEED = 7.0    # how fast the ship swerves, pixels a second
-DRIFT = (3, 22)       # how far back and forward the ship wanders (its left edge, px)
-DRIFT_SPEED = 1.5    # how fast it drifts forwards and backwards, pixels a second
+DRIFT = (2, 44)      # how far back and forward the ship roams (its left edge, px)
+DRIFT_SPEED = 4.0    # top speed when it flies forwards or back, pixels a second
+ROAM_S = (1.0, 4.0)  # seconds it lingers at a spot before flying somewhere new (min, max)
 LOOKAHEAD = 18       # how far ahead the ship watches for asteroids (px)
 BACKDROP = 0.3       # brightness of everything behind the ship: stars, suns, planets (0..1)
 MUTE = 0.55          # how much colour is drained from the backdrop (0 = full colour, 1 = grey)
@@ -503,16 +504,30 @@ def frame(su, g, t):
 
     # drift forwards and backwards
     if t >= next_drift:
-        target_x = random.randint(DRIFT[0], DRIFT[1]) << 8
-        next_drift = t + random.uniform(3, 9)
+        # somewhere new, and usually a good way off, so it really moves about
+        cur = ship_x >> 8
+        for _ in range(4):
+            nx = random.randint(DRIFT[0], DRIFT[1])
+            if abs(nx - cur) >= (DRIFT[1] - DRIFT[0]) // 3:
+                break
+        target_x = nx << 8
+        next_drift = t + 1e9                      # fly all the way there first
+        next_cruise = min(next_cruise, t + 0.5)     # and often a new height to go with it
     if ufo is not None and ufo[2] != "out":
         # hang back behind a saucer that's arriving or hovering
         target_x = min(target_x, max(DRIFT[0], int(ufo[5]) - 10) << 8)
-    stepx = int(DRIFT_SPEED * dt * 256) or 1
-    if ship_x < target_x:
+    # ease in and out: full speed in the middle of a trip, slowing to arrive
+    gap = target_x - ship_x
+    sp = min(DRIFT_SPEED, 0.25 + abs(gap) / 256 * 0.9)
+    if dodge is not None and gap > 0:
+        sp *= 0.5                              # mid-dodge: don't charge forwards into rocks
+    stepx = int(sp * dt * 256) or 1
+    if gap > 0:
         ship_x = min(target_x, ship_x + stepx)
-    elif ship_x > target_x:
+    elif gap < 0:
         ship_x = max(target_x, ship_x - stepx)
+    if ship_x == target_x and next_drift > t + 1e8:
+        next_drift = t + random.uniform(*ROAM_S)   # arrived: linger a moment
     sx = (ship_x + 128) >> 8
 
     # dodging: pick the nearest clear lane and stick with it until it's safe;
@@ -539,8 +554,8 @@ def frame(su, g, t):
     else:
         dodge = None
         if t >= next_cruise:
-            cruise_y = random.randint(2, H - 4) << 8
-            next_cruise = t + random.uniform(3, 8)
+            cruise_y = random.randint(1, H - 3) << 8
+            next_cruise = t + random.uniform(2, 5)
         target_y = cruise_y + int(math.sin(t * 1.3) * 120)
     step = int(DODGE_SPEED * (2 if hard else 1) * dt * 256) or 1
     if ship_y < target_y:
