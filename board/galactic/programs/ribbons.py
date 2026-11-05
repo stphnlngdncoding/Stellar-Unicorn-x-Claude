@@ -14,12 +14,13 @@ import random
 from array import array
 from galactic import GalacticUnicorn
 
-SHAPES = (2, 3)      # how many shapes (min, max; A picks again)
+SHAPES = (2, 2)      # how many shapes (min, max; A picks again; 3 gets busy on the strip)
 CORNERS = (3, 4)     # corners per shape (min, max)
 SPEED = (9.0, 20.0)  # corner speed across the strip, pixels a second (min, max)
-TRAIL = 7            # echoes trailing behind each shape
-GAP = 3              # frames between echoes (bigger = wider-spaced ribbons)
+TRAIL = 4            # echoes trailing behind each shape
+GAP = 4              # frames between echoes (bigger = wider-spaced ribbons)
 HUE_SPEED = 8.0      # colour drift, degrees of hue a second
+RISE = 45            # up-and-down speed as a percent of the across speed
 FRAME = 0.04
 
 MAX_SHAPES = 4
@@ -40,7 +41,7 @@ def setup(su, g):
     for h in range(HUES):
         r, gg, b = hsv(h / HUES, 0.85)
         for lv in range(LEVELS):
-            m = ((lv + 1) / LEVELS) ** 1.8
+            m = ((lv + 1) / LEVELS) ** 2.2
             PEN.append(g.create_pen(int(r * m), int(gg * m), int(b * m)))
     pos = array("i", [0] * (MAX_SHAPES * MAX_CORNERS * 2))
     vel = array("i", [0] * (MAX_SHAPES * MAX_CORNERS * 2))
@@ -62,26 +63,26 @@ def hsv(h, s):
     q = 1 - s * f
     t = 1 - s * (1 - f)
     r, g, b = ((1, t, p), (q, 1, p), (p, 1, t), (p, q, 1), (t, p, 1), (1, p, q))[i % 6]
-    return 255 * r, 255 * g, 255 * b
+    return 210 * r, 210 * g, 210 * b
 
 def rand_vel():
-    v = random.uniform(SPEED[0], SPEED[1]) * 256 * FRAME
+    v = max(8, random.uniform(SPEED[0], SPEED[1]) * 256 * FRAME)
     return int(v) if random.getrandbits(1) else -int(v)
 
 def new_scene():
     global nshapes, filled
-    nshapes = min(MAX_SHAPES, random.randint(SHAPES[0], SHAPES[1]))
+    nshapes = max(1, min(MAX_SHAPES, random.randint(SHAPES[0], SHAPES[1])))
     h0 = random.random()
     for s in range(nshapes):
-        ncorn[s] = random.randint(CORNERS[0], CORNERS[1])
+        ncorn[s] = max(2, min(MAX_CORNERS, random.randint(CORNERS[0], CORNERS[1])))
         hue[s] = (h0 + s / nshapes + random.uniform(-0.05, 0.05)) % 1.0
         for c in range(MAX_CORNERS):
             i = (s * MAX_CORNERS + c) * 2
             pos[i] = random.randrange((W - 1) << 8)
             pos[i + 1] = random.randrange((H - 1) << 8)
             vel[i] = rand_vel()
-            # across a short strip the corners move more gently up and down
-            vel[i + 1] = rand_vel() * H // W + (1 if random.getrandbits(1) else -1) * random.randint(10, 30)
+            # up and down they move a little slower than across
+            vel[i + 1] = rand_vel() * RISE // 100 or 4
     filled = 0
 
 def bounce(i, lim, k):
@@ -92,7 +93,7 @@ def bounce(i, lim, k):
     if p < 0 or p > lim:
         sp = abs(rand_vel())
         if k:
-            sp = sp * H // W + random.randint(10, 30)
+            sp = sp * RISE // 100 + 4
         if p < 0:
             p = -p
             v = sp
@@ -143,7 +144,7 @@ def frame(su, g, t):
         if k == 0:
             lv = LEVELS - 1
         else:
-            lv = (LEVELS - 2) * (TR + 1 - k) // TR
+            lv = (LEVELS - 3) * (TR + 1 - k) // TR
         for s in range(nshapes):
             g.set_pen(PEN[hhue[slot * MAX_SHAPES + s] * LEVELS + lv])
             j = (slot * MAX_SHAPES + s) * MAX_CORNERS * 2
