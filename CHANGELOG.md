@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.3.3: the cloud no longer burns through Cloudflare's free tier (2026-11-05)
+
+- **Cloud only; boards need no update.** Each board keeps a check-in open for 50 seconds at a time, and the Durable Object was awake for all of it, which cost about 83% of the free daily duration limit per board. Two boards went over it. The wait now lives in the Worker: the Durable Object sleeps on a hibernating WebSocket and only wakes for a check-in or a command. Commands still reach a held check-in immediately.
+
 ## v6.3.2: opening Settings no longer crashes the Galactic (2026-11-05)
 
 - **Launcher v6.3.2.** Opening Settings for a big program (the spaceship, the world map) reads the program's whole source from the board. On the Galactic that could run out of memory and knock the board offline. Now, for a file over 6 KB, the playing program pauses while the file is read and sent, frees the original copy before encoding it, then picks straight back up (the board keeps reporting it as playing). Boards on 6.3.1 upgrade with `board/upgrades/install_v632.py`.

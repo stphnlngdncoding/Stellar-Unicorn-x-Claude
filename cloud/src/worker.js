@@ -10,6 +10,11 @@
 // Each board has its own Durable Object holding its command queue; the board
 // picks commands up on its next check-in, runs them, and reports results on
 // the following one. Every tool takes an optional "board" (default stellar).
+//
+// A board's check-in stays open for up to 50 seconds, around the clock. That
+// wait lives here in the Worker, not in the Durable Object: a Durable Object is
+// billed for every second it's awake, so it sleeps on a hibernating WebSocket
+// and only wakes when there's a command to pass on.
 
 import APP_HTML from "./app/index.html";
 import { ICON_180, ICON_512 } from "./app/icons.js";
@@ -20,6 +25,7 @@ const ONLINE_WINDOW_MS = 20000;
 const MAX_QUEUE = 20;
 const POLL_SECONDS = 3;
 const MAX_HOLD_MS = 50000;   // long-poll: hold an idle board check-in this long
+const CLOSE_REPLACED = 4000; // WebSocket close code: a newer check-in took over
 
 // The boards this Worker knows. "object" names each board's Durable Object
 // (the Stellar keeps the name it always had, so its queue and status carry over).
@@ -216,12 +222,13 @@ export class Board {
     this.state = state;
     this.env = env;
     this.waiters = new Map();
-    this.wakeBoard = null;
   }
 
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === "/sync") return this.sync(await request.json());
+    if (url.pathname === "/hold") return this.hold();
+    if (url.pathname === "/take") return Response.json({ commands: await this.take() });
     if (url.pathname === "/command") return this.command(await request.json());
     if (url.pathname === "/status") return Response.json(await this.status());
     return new Response("not found", { status: 404 });
@@ -231,9 +238,10 @@ export class Board {
     const s = await this.state.storage.get(["status", "lastSeen", "queue"]);
     const lastSeen = s.get("lastSeen") || 0;
     const age = lastSeen ? Date.now() - lastSeen : null;
+    const waiting = this.state.getWebSockets().length > 0;   // a check-in is being held open
     return {
-      online: !!this.wakeBoard || (age !== null && age < ONLINE_WINDOW_MS),
-      last_seen_seconds_ago: this.wakeBoard ? 0 : age === null ? null : Math.round(age / 1000),
+      online: waiting || (age !== null && age < ONLINE_WINDOW_MS),
+      last_seen_seconds_ago: waiting ? 0 : age === null ? null : Math.round(age / 1000),
       queued_commands: (s.get("queue") || []).length,
       board: s.get("status") || null,
     };
@@ -248,20 +256,42 @@ export class Board {
         resolve(r);
       }
     }
-    let queue = (await this.state.storage.get("queue")) || [];
-    const hold = Math.min(Number(body.wait) || 0, MAX_HOLD_MS / 1000) * 1000;
-    if (!queue.length && hold > 0) {
-      // long-poll: keep the connection open until a command arrives or time runs out
-      if (this.wakeBoard) this.wakeBoard();
-      await new Promise((resolve) => {
-        const timer = setTimeout(() => { this.wakeBoard = null; resolve(); }, hold);
-        this.wakeBoard = () => { clearTimeout(timer); this.wakeBoard = null; resolve(); };
-      });
-      await this.state.storage.put("lastSeen", Date.now());
-      queue = (await this.state.storage.get("queue")) || [];
+    const commands = await this.take(false);
+    // nothing to do: tell the Worker how long to hold the check-in open
+    const hold = commands.length ? 0 : Math.min(Number(body.wait) || 0, MAX_HOLD_MS / 1000) * 1000;
+    return Response.json({ commands, poll: POLL_SECONDS, long_poll: true, hold });
+  }
+
+  // The Worker waits on the other end of this socket. The socket is hibernatable,
+  // so this object can leave memory (and stop being billed) during the wait.
+  async hold() {
+    for (const old of this.state.getWebSockets()) {
+      try { old.close(CLOSE_REPLACED, "replaced by a newer check-in"); } catch (e) {}
     }
+    const pair = new WebSocketPair();
+    this.state.acceptWebSocket(pair[1]);
+    // a command that slipped in after /sync looked at the queue
+    if (((await this.state.storage.get("queue")) || []).length) this.wake();
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  // Commands stay queued until the Worker takes them, so one sent just as a hold
+  // ends isn't lost: the board's next check-in collects it.
+  wake() {
+    for (const ws of this.state.getWebSockets()) {
+      try { ws.send("wake"); } catch (e) {}
+    }
+  }
+
+  async take(touch = true) {
+    const queue = (await this.state.storage.get("queue")) || [];
     if (queue.length) await this.state.storage.put("queue", []);
-    return Response.json({ commands: queue, poll: POLL_SECONDS, long_poll: true });
+    if (touch) await this.state.storage.put("lastSeen", Date.now());
+    return queue;
+  }
+
+  webSocketClose(ws, code, reason) {
+    try { ws.close(code, reason); } catch (e) {}
   }
 
   async command(cmd) {
@@ -270,7 +300,7 @@ export class Board {
     queue.push(cmd);
     while (queue.length > MAX_QUEUE) queue.shift();
     await this.state.storage.put("queue", queue);
-    if (this.wakeBoard) this.wakeBoard();
+    this.wake();
 
     const result = await new Promise((resolve) => {
       this.waiters.set(cmd.id, resolve);
@@ -480,6 +510,34 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
+// A board's check-in, in the Worker: hand it to the Durable Object, and if
+// there's nothing to do, wait here until the object says a command has arrived.
+async function boardSync(stub, body) {
+  const res = await stub.fetch("https://board/sync", { method: "POST", body });
+  if (!res.ok) return res;
+  const { hold, ...reply } = await res.json();
+  if (hold > 0) reply.commands = await waitForCommands(stub, hold);
+  return Response.json(reply);
+}
+
+async function waitForCommands(stub, ms) {
+  const res = await stub.fetch("https://board/hold", { headers: { Upgrade: "websocket" } });
+  const ws = res.webSocket;
+  if (!ws) return [];
+  ws.accept();
+  const woken = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    const finish = (v) => { clearTimeout(timer); resolve(v); };
+    ws.addEventListener("message", () => finish(true));
+    ws.addEventListener("close", () => finish(false));
+    ws.addEventListener("error", () => finish(false));
+  });
+  try { ws.close(1000, "done"); } catch (e) {}
+  if (!woken) return [];
+  const took = await stub.fetch("https://board/take", { method: "POST" });
+  return (await took.json()).commands;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -493,7 +551,7 @@ export default {
         return new Response("unauthorized", { status: 401 });
       }
       if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-      return stubFor(which).fetch("https://board/sync", { method: "POST", body: await request.text() });
+      return boardSync(stubFor(which), await request.text());
     }
 
     const parts = url.pathname.split("/");
