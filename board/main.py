@@ -1,4 +1,6 @@
-# Stellar Unicorn launcher v6.2 (playlists, one-shot programs, long-polling cloud, self-healing)
+# Unicorn launcher v6.3 for the Stellar Unicorn (16x16) and the Galactic Unicorn
+# (53x11): playlists, one-shot programs, long-polling cloud, self-healing.
+# The same file runs on both; it checks which board's firmware it's on.
 #
 # Keeps a small web server running on your Wi-Fi *while* programs play, so a
 # new program can be sent and started at any time, no button presses needed.
@@ -18,7 +20,7 @@
 #         ...
 #         return 0.03          # optional: seconds to wait before next frame
 #
-# su is the StellarUnicorn, g the PicoGraphics. Don't create your own, don't
+# su is the StellarUnicorn or GalacticUnicorn, g the PicoGraphics. Don't create your own, don't
 # call su.update() (the launcher does), and don't write a `while True` loop.
 # Old-style programs with their own loop still run, but the board restarts
 # into them and the web server is off until you press the sleep button.
@@ -37,7 +39,7 @@
 
 import os, sys, time, gc, json, math, machine, micropython
 
-VERSION = "6.2.4"
+VERSION = "6.3.0"
 MEM_RESET_S = 20                # still out of memory this long -> clean restart
 LOW_FLASH_KB = 200              # blink a warning border when free storage drops below this
 RESUME_FILE = "_resume"          # program to resume after a self-heal restart
@@ -46,7 +48,25 @@ CLOUD_SILENT_S = 300             # no cloud contact this long (Wi-Fi up) -> rest
 HOLD_SECONDS = 50                # ask the cloud to keep each check-in open this long
 CLOUD_FILE = "_cloud.json"       # {"url": "https://...", "token": "..."}
 PORT = 80
-HOSTNAME = "unicorn"
+
+
+def _which_board():
+    """'stellar' or 'galactic', from the Pimoroni firmware that's installed."""
+    try:
+        import stellar
+        return "stellar"
+    except ImportError:
+        pass
+    try:
+        import galactic
+        return "galactic"
+    except ImportError:
+        return "stellar"
+
+
+BOARD = _which_board()
+SYNC_PATH = "/board/sync" if BOARD == "stellar" else "/board/sync?board=" + BOARD
+HOSTNAME = "galactic" if BOARD == "galactic" else "unicorn"   # http://<hostname>.local on your Wi-Fi
 DEFAULT_FILE = "_default"          # program that runs at power-on
 LEGACY_NEXT = "_legacy_next"       # old-style program to run after a restart
 NO_AUTOSTART = "_no_autostart"     # skip a legacy default on the next boot
@@ -126,12 +146,20 @@ def local_time():
 
 # ---------- legacy mode: old-style programs with their own loop ----------
 
+def unicorn_class():
+    if BOARD == "galactic":
+        from galactic import GalacticUnicorn
+        return GalacticUnicorn
+    from stellar import StellarUnicorn
+    return StellarUnicorn
+
+
 _timer = None
 
 def run_legacy(name):
     global _timer
-    from stellar import StellarUnicorn
-    button = machine.Pin(StellarUnicorn.SWITCH_SLEEP, machine.Pin.IN, machine.Pin.PULL_UP)
+    Unicorn = unicorn_class()
+    button = machine.Pin(Unicorn.SWITCH_SLEEP, machine.Pin.IN, machine.Pin.PULL_UP)
     armed = [False]
 
     def back(_):
@@ -160,13 +188,17 @@ def run_legacy(name):
 
 def launcher():
     import asyncio, network
-    from stellar import StellarUnicorn
-    from picographics import PicoGraphics, DISPLAY_STELLAR_UNICORN as DISPLAY
+    import picographics
+    from picographics import PicoGraphics
+    Unicorn = unicorn_class()
+    DISPLAY = picographics.DISPLAY_GALACTIC_UNICORN if BOARD == "galactic" else picographics.DISPLAY_STELLAR_UNICORN
 
-    su = StellarUnicorn()
+    su = Unicorn()
     g = PicoGraphics(DISPLAY)
     su.set_brightness(1.0)      # start at full brightness
-    W = StellarUnicorn.WIDTH
+    W = Unicorn.WIDTH
+    H = Unicorn.HEIGHT
+    TEXT_Y = (H - 7) // 2          # bitmap8 text, centred: 4 on the Stellar, 2 on the Galactic
 
     st = {
         "env": None,          # the running program's globals
@@ -217,7 +249,8 @@ def launcher():
     # new secure connection, and setting that up pauses everything for about
     # half a second. Rather than let the new program stutter, a small spinner
     # plays until the connection is made, then the program starts from t = 0.
-    RING = [(7 + round(3.4 * math.cos(i * math.pi / 6)), 7 + round(3.4 * math.sin(i * math.pi / 6)))
+    CX, CY = W // 2 - 1, H // 2 - 1
+    RING = [(CX + round(3.4 * math.cos(i * math.pi / 6)), CY + round(3.4 * math.sin(i * math.pi / 6)))
             for i in range(12)]
     LOADPENS = []
 
@@ -265,11 +298,12 @@ def launcher():
         phase = (now // 200) % 225
         if phase < 8 and phase % 2 == 0:
             g.set_pen(g.create_pen(255, 80, 0))
-            for i in range(16):
+            for i in range(W):
                 g.pixel(i, 0)
-                g.pixel(i, 15)
+                g.pixel(i, H - 1)
+            for i in range(H):
                 g.pixel(0, i)
-                g.pixel(15, i)
+                g.pixel(W - 1, i)
 
     def start_program(name, managed=False):
         """Load and start a contract program. Returns None or an error string.
@@ -462,15 +496,15 @@ def launcher():
         while True:
             if _wd:
                 _wd.tick()
-            pressed = su.is_pressed(StellarUnicorn.SWITCH_SLEEP)
+            pressed = su.is_pressed(Unicorn.SWITCH_SLEEP)
             if pressed and not sleep_was:
                 st["asleep"] = not st["asleep"]
                 if st["asleep"]:
                     clear_display()
             sleep_was = pressed
-            if su.is_pressed(StellarUnicorn.SWITCH_BRIGHTNESS_UP):
+            if su.is_pressed(Unicorn.SWITCH_BRIGHTNESS_UP):
                 su.adjust_brightness(+0.01)
-            if su.is_pressed(StellarUnicorn.SWITCH_BRIGHTNESS_DOWN):
+            if su.is_pressed(Unicorn.SWITCH_BRIGHTNESS_DOWN):
                 su.adjust_brightness(-0.01)
 
             if st["asleep"] or st["hold"]:
@@ -506,7 +540,7 @@ def launcher():
                 g.set_pen(g.create_pen(0, 0, 0))
                 g.clear()
                 g.set_pen(g.create_pen(r, gr, b))
-                g.text(msg, x, 4, -1, 1)
+                g.text(msg, x, TEXT_Y, -1, 1)
                 su.update(g)
                 x -= 1
                 if x < -g.measure_text(msg, 1):
@@ -538,6 +572,8 @@ def launcher():
         s = os.statvfs("/")
         return {
             "version": VERSION,
+            "model": BOARD,
+            "size": [W, H],
             "ip": st["ip"],
             "running": st["name"],
             "asleep": st["asleep"],
@@ -788,9 +824,9 @@ def launcher():
         reader, writer = await asyncio.open_connection(host, port, ssl=ctx)
         try:
             body = json.dumps(payload).encode()
-            head = ("POST /board/sync HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\n"
+            head = ("POST %s HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\n"
                     "Content-Type: application/json\r\nContent-Length: %d\r\n"
-                    "Connection: close\r\n\r\n") % (host, cfg["token"], len(body))
+                    "Connection: close\r\n\r\n") % (SYNC_PATH, host, cfg["token"], len(body))
             writer.write(head.encode())
             writer.write(body)
             await writer.drain()
@@ -822,7 +858,7 @@ def launcher():
             import requests
         except ImportError:
             import urequests as requests
-        r = requests.post(cfg["url"].rstrip("/") + "/board/sync",
+        r = requests.post(cfg["url"].rstrip("/") + SYNC_PATH,
                           data=json.dumps(payload),
                           headers={"Authorization": "Bearer " + cfg["token"],
                                    "Content-Type": "application/json"})
@@ -1042,6 +1078,7 @@ def launcher():
         err_html = ("<div class=err>" + err.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</div>") if err else ""
         s = os.statvfs("/")
         return (PAGE.replace("{{ROWS}}", rows)
+                    .replace("{{TITLE}}", "Galactic Unicorn" if BOARD == "galactic" else "Stellar Unicorn")
                     .replace("{{ERROR}}", err_html)
                     .replace("{{FREE}}", str(s[0] * s[3] // 1024)))
 
@@ -1070,7 +1107,7 @@ button.del{background:#a33}button.alt{background:#444}
 .err{background:#3a1212;padding:10px;border-radius:8px;white-space:pre-wrap;font-family:monospace;font-size:.85em}
 small{color:#999}
 </style></head><body>
-<h1>Stellar Unicorn</h1>
+<h1>{{TITLE}}</h1>
 {{ERROR}}
 <h3>Programs</h3><ul>{{ROWS}}</ul>
 <button class=alt onclick="act('stop','')">Stop</button>

@@ -40,6 +40,10 @@ The board can't be reached from the internet, so it keeps a connection open to a
 
 After setup the board only needs USB power. Prefer to do it by hand? See [manual setup](GUIDE.md#manual-setup). Launcher updates can be installed over the air; see [`board/upgrades/`](board/upgrades/README.md).
 
+### A second board: Galactic Unicorn
+
+The same launcher, cloud and connector also run a [Galactic Unicorn](https://shop.pimoroni.com/products/space-unicorns) (53×11). `board/main.py` notices which board it's on, and the Galactic checks in with the same token, so there's nothing new to deploy or add in claude.ai: every connector tool takes `board: "galactic"`. See [adding a Galactic](GUIDE.md#adding-a-galactic-unicorn). Programs for it live in `board/galactic/programs/`.
+
 ### The Remote on your iPhone
 
 The Worker also serves the Unicorn Remote as a phone app. Its address is your connector URL with `/mcp/` changed to `/app/` (and a `/` on the end); `bash cloud/deploy-app.sh` updates the Worker and prints it. Open it in Safari, tap Share, then *Add to Home Screen*: it opens full screen like an app and works anywhere, Wi-Fi or cellular. Keep the address private, like the connector URL.

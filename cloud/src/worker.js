@@ -1,13 +1,15 @@
-// Unicorn cloud: a tiny relay between Claude and a Stellar Unicorn.
+// Unicorn cloud: a tiny relay between Claude and your Pimoroni Unicorn boards
+// (a Stellar Unicorn, and optionally a Galactic Unicorn).
 //
 //   /mcp/<MCP_SECRET>   MCP server (streamable HTTP) that Claude connects to
 //   /app/<MCP_SECRET>/  the Unicorn Remote as a phone web app (add it to your
 //                       home screen); same secret, same tools as the connector
-//   /board/sync         the board checks in here every few seconds
-//                       (Authorization: Bearer <BOARD_TOKEN>)
+//   /board/sync         a board checks in here (Authorization: Bearer <BOARD_TOKEN>);
+//                       ?board=galactic for the Galactic, otherwise it's the Stellar
 //
-// Commands from Claude are queued in a Durable Object; the board picks them up
-// on its next check-in, runs them, and reports results on the following one.
+// Each board has its own Durable Object holding its command queue; the board
+// picks commands up on its next check-in, runs them, and reports results on
+// the following one. Every tool takes an optional "board" (default stellar).
 
 import APP_HTML from "./app/index.html";
 import { ICON_180, ICON_512 } from "./app/icons.js";
@@ -18,6 +20,18 @@ const ONLINE_WINDOW_MS = 20000;
 const MAX_QUEUE = 20;
 const POLL_SECONDS = 3;
 const MAX_HOLD_MS = 50000;   // long-poll: hold an idle board check-in this long
+
+// The boards this Worker knows. "object" names each board's Durable Object
+// (the Stellar keeps the name it always had, so its queue and status carry over).
+const BOARDS = {
+  stellar: { object: "board-v2", title: "Stellar Unicorn", size: "16x16" },
+  galactic: { object: "galactic-v1", title: "Galactic Unicorn", size: "53 wide x 11 tall" },
+};
+const BOARD_NAMES = Object.keys(BOARDS);
+const BOARD_ARG = {
+  type: "string", enum: BOARD_NAMES,
+  description: "Which board: stellar (16x16, the default) or galactic (53x11).",
+};
 
 const GUIDE = `# Programming the Stellar Unicorn (16x16 RGB LEDs)
 
@@ -79,17 +93,34 @@ When a program errors, the upload result contains the traceback: fix and
 re-upload under the same name.
 `;
 
+// The Galactic's guide is the Stellar's with its own size, module and tips.
+const GUIDE_GALACTIC = GUIDE
+  .replace("# Programming the Stellar Unicorn (16x16 RGB LEDs)", "# Programming the Galactic Unicorn (53x11 RGB LEDs)")
+  .replace("su is the StellarUnicorn", "su is the GalacticUnicorn")
+  .replace(`- Display is 16 wide x 16 tall: x 0..15 left to right, y 0..15 top to bottom.
+  su.WIDTH and su.HEIGHT are both 16.`, `- Display is 53 wide x 11 tall: x 0..52 left to right, y 0..10 top to bottom.
+  Use su.WIDTH (53) and su.HEIGHT (11) rather than hard-coding numbers. It's a
+  wide strip: scenes read best when things move sideways, text scrolls, and
+  big objects are short and long rather than tall.`)
+  .replace("Keep frames light: 256 pixels is small", "Keep frames light: 583 pixels is small")
+  .replace("all 256 pixels with a", "all 583 pixels with a")
+  .replace("bitmap8 is 8 px tall and readable", "bitmap8 is 8 px tall and readable (y=2 centres it on the 11-row strip)")
+  .replace("    from stellar import StellarUnicorn\n    su.is_pressed(StellarUnicorn.SWITCH_A)", "    from galactic import GalacticUnicorn\n    su.is_pressed(GalacticUnicorn.SWITCH_A)")
+  .replace("y=4 centres bitmap8", "y=2 centres bitmap8");
+
+function guideFor(board) { return board === "galactic" ? GUIDE_GALACTIC : GUIDE; }
+
 const TOOLS = [
   {
     name: "get_programming_guide",
-    description: "How to write programs for the Stellar Unicorn LED board (program contract, drawing API, buttons, time). Read this before writing a new program.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    description: "How to write programs for a board (program contract, drawing API, buttons, time). Pass board=galactic for the 53x11 Galactic Unicorn. Read it before writing a program for that board.",
+    inputSchema: { type: "object", properties: { board: BOARD_ARG }, additionalProperties: false },
     annotations: { readOnlyHint: true },
   },
   {
     name: "get_board_status",
-    description: "Whether the board is online, what is playing, the power-on default, the list of programs, the last error and brightness.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    description: "Whether the board is online, what is playing, the power-on default, the list of programs, the last error and brightness. Also lists the other boards briefly.",
+    inputSchema: { type: "object", properties: { board: BOARD_ARG }, additionalProperties: false },
     annotations: { readOnlyHint: true },
   },
   {
@@ -102,6 +133,7 @@ const TOOLS = [
         code: { type: "string", description: "Full program source" },
         run: { type: "boolean", description: "Start it right away (default true)" },
         make_default: { type: "boolean", description: "Also make it play at power-on (default false)" },
+        board: BOARD_ARG,
       },
       required: ["name", "code"],
       additionalProperties: false,
@@ -112,7 +144,7 @@ const TOOLS = [
     description: "Start a program that is already on the board.",
     inputSchema: {
       type: "object",
-      properties: { name: { type: "string" } },
+      properties: { name: { type: "string" }, board: BOARD_ARG },
       required: ["name"],
       additionalProperties: false,
     },
@@ -120,14 +152,14 @@ const TOOLS = [
   {
     name: "stop_program",
     description: "Stop the current program (the board shows its IP address).",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    inputSchema: { type: "object", properties: { board: BOARD_ARG }, additionalProperties: false },
   },
   {
     name: "set_default_program",
     description: "Choose which program plays when the board powers on.",
     inputSchema: {
       type: "object",
-      properties: { name: { type: "string" } },
+      properties: { name: { type: "string" }, board: BOARD_ARG },
       required: ["name"],
       additionalProperties: false,
     },
@@ -137,7 +169,7 @@ const TOOLS = [
     description: "Read the source code of a program on the board, e.g. to edit it.",
     inputSchema: {
       type: "object",
-      properties: { name: { type: "string" } },
+      properties: { name: { type: "string" }, board: BOARD_ARG },
       required: ["name"],
       additionalProperties: false,
     },
@@ -148,7 +180,7 @@ const TOOLS = [
     description: "Delete a program from the board.",
     inputSchema: {
       type: "object",
-      properties: { name: { type: "string" } },
+      properties: { name: { type: "string" }, board: BOARD_ARG },
       required: ["name"],
       additionalProperties: false,
     },
@@ -159,7 +191,7 @@ const TOOLS = [
     description: "Set display brightness from 0 (off) to 1 (full).",
     inputSchema: {
       type: "object",
-      properties: { value: { type: "number", minimum: 0, maximum: 1 } },
+      properties: { value: { type: "number", minimum: 0, maximum: 1 }, board: BOARD_ARG },
       required: ["value"],
       additionalProperties: false,
     },
@@ -167,11 +199,13 @@ const TOOLS = [
 ];
 
 const INSTRUCTIONS =
-  "These tools control a Pimoroni Stellar Unicorn, a 16x16 RGB LED matrix on the user's wall. " +
+  "These tools control the user's Pimoroni Unicorn LED boards: a Stellar Unicorn (16x16, board=stellar, " +
+  "the default when no board is given) and a Galactic Unicorn (53 wide x 11 tall, board=galactic). " +
+  "Pass board on every call when working with the Galactic; programs must be written for that board's size. " +
   "To show something new, call get_programming_guide (once per conversation), write a program that " +
   "follows its contract, and send it with upload_program. If the result is an error traceback, fix " +
   "the code and upload again under the same name. To change an existing program, read it with " +
-  "get_program_source first.";
+  "get_program_source first, from the same board.";
 
 // ---------------------------------------------------------------------------
 // Durable Object: holds the command queue and the board's last status
@@ -278,17 +312,33 @@ async function sendCommand(stub, cmd) {
   return text("Queued, not confirmed yet. " + where, !status.online);
 }
 
-async function callTool(name, args, stub) {
+async function callTool(name, args, stubFor) {
   args = args || {};
+  const board = args.board === undefined || args.board === null || args.board === "" ? "stellar" : args.board;
+  if (!BOARDS[board]) return text("board must be one of: " + BOARD_NAMES.join(", "), true);
+  const stub = stubFor(board);
   const needName = ["upload_program", "run_program", "set_default_program", "get_program_source", "delete_program"];
   if (needName.includes(name) && !NAME_RE.test(args.name || "")) {
     return text("Use a file name like my_program.py (letters, digits, _ - only).", true);
   }
   switch (name) {
     case "get_programming_guide":
-      return text(GUIDE);
-    case "get_board_status":
-      return text(JSON.stringify(await boardCall(stub, "/status"), null, 2));
+      return text(guideFor(board));
+    case "get_board_status": {
+      const st = await boardCall(stub, "/status");
+      st.which = board;
+      st.title = BOARDS[board].title + " (" + BOARDS[board].size + ")";
+      // a one-line glance at the other boards, so Claude knows they're there
+      st.other_boards = {};
+      for (const other of BOARD_NAMES) {
+        if (other === board) continue;
+        const o = await boardCall(stubFor(other), "/status");
+        st.other_boards[other] = o.last_seen_seconds_ago === null
+          ? "never connected"
+          : (o.online ? "online" : "offline") + (o.board && o.board.running ? ", playing " + o.board.running : "");
+      }
+      return text(JSON.stringify(st, null, 2));
+    }
     case "upload_program":
       if (typeof args.code !== "string" || !args.code.trim()) return text("code is empty", true);
       if (args.code.length > 60000) return text("Program is too large (60 KB max).", true);
@@ -316,7 +366,7 @@ async function callTool(name, args, stub) {
   }
 }
 
-async function handleRpc(msg, stub) {
+async function handleRpc(msg, stubFor) {
   const { id, method, params } = msg;
   const reply = (result) => ({ jsonrpc: "2.0", id, result });
   const fail = (code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
@@ -328,7 +378,7 @@ async function handleRpc(msg, stub) {
       return reply({
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "stellar-unicorn", title: "Stellar Unicorn", version: "1.0.0" },
+        serverInfo: { name: "stellar-unicorn", title: "Unicorn boards", version: "1.1.0" },
         instructions: INSTRUCTIONS,
       });
     }
@@ -338,7 +388,7 @@ async function handleRpc(msg, stub) {
       return reply({ tools: TOOLS });
     case "tools/call": {
       try {
-        const out = await callTool(params && params.name, params && params.arguments, stub);
+        const out = await callTool(params && params.name, params && params.arguments, stubFor);
         if (!out) return fail(-32602, "Unknown tool: " + (params && params.name));
         return reply(out);
       } catch (e) {
@@ -350,7 +400,7 @@ async function handleRpc(msg, stub) {
   }
 }
 
-async function handleMcp(request, stub) {
+async function handleMcp(request, stubFor) {
   if (request.method === "GET") return new Response("Method Not Allowed", { status: 405, headers: { Allow: "POST" } });
   if (request.method === "DELETE") return new Response(null, { status: 204 });
   if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
@@ -362,10 +412,10 @@ async function handleMcp(request, stub) {
     return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, { status: 400 });
   }
   if (Array.isArray(body)) {
-    const out = (await Promise.all(body.map((m) => handleRpc(m, stub)))).filter(Boolean);
+    const out = (await Promise.all(body.map((m) => handleRpc(m, stubFor)))).filter(Boolean);
     return out.length ? Response.json(out) : new Response(null, { status: 202 });
   }
-  const out = await handleRpc(body, stub);
+  const out = await handleRpc(body, stubFor);
   return out ? Response.json(out) : new Response(null, { status: 202 });
 }
 
@@ -389,7 +439,7 @@ function pngResponse(b64) {
   return new Response(bytes, { headers: { ...PRIVATE, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
 }
 
-async function handleApp(request, stub, rest, base) {
+async function handleApp(request, stubFor, rest, base) {
   if (rest === "" || rest === "index.html") {
     return new Response(APP_HTML, {
       headers: { ...PRIVATE, "Content-Type": "text/html; charset=utf-8",
@@ -412,7 +462,7 @@ async function handleApp(request, stub, rest, base) {
     try { body = await request.json(); } catch { return new Response("bad request", { status: 400, headers: PRIVATE }); }
     if (!APP_TOOLS.includes(body && body.tool)) return new Response("unknown tool", { status: 400, headers: PRIVATE });
     let out;
-    try { out = await callTool(body.tool, body.args, stub); }
+    try { out = await callTool(body.tool, body.args, stubFor); }
     catch (e) { out = text("Server error: " + (e && e.message), true); }
     return Response.json(out, { headers: PRIVATE });
   }
@@ -433,15 +483,17 @@ function safeEqual(a, b) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const stub = env.BOARD.get(env.BOARD.idFromName("board-v2"));
+    const stubFor = (board) => env.BOARD.get(env.BOARD.idFromName(BOARDS[board].object));
 
     if (url.pathname === "/board/sync") {
+      const which = url.searchParams.get("board") || "stellar";
+      if (!BOARDS[which]) return new Response("unknown board", { status: 404 });
       const auth = request.headers.get("Authorization") || "";
       if (!env.BOARD_TOKEN || !safeEqual(auth, "Bearer " + env.BOARD_TOKEN)) {
         return new Response("unauthorized", { status: 401 });
       }
       if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-      return stub.fetch("https://board/sync", { method: "POST", body: await request.text() });
+      return stubFor(which).fetch("https://board/sync", { method: "POST", body: await request.text() });
     }
 
     const parts = url.pathname.split("/");
@@ -449,7 +501,7 @@ export default {
       if (!env.MCP_SECRET || !safeEqual(parts[2] || "", env.MCP_SECRET) || parts.length > 3) {
         return new Response("not found", { status: 404 });
       }
-      return handleMcp(request, stub);
+      return handleMcp(request, stubFor);
     }
 
     if (parts[1] === "app") {
@@ -458,7 +510,7 @@ export default {
       }
       const base = "/app/" + parts[2] + "/";
       if (parts.length === 3) return Response.redirect(url.origin + base, 301);  // relative links need the slash
-      return handleApp(request, stub, parts[3], base);
+      return handleApp(request, stubFor, parts[3], base);
     }
 
     if (url.pathname === "/") return new Response("Unicorn cloud is running.\n");

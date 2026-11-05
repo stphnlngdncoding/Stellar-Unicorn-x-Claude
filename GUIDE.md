@@ -31,6 +31,19 @@ Claude ──MCP──▶  Cloudflare Worker  ◀──HTTPS long-poll──  St
 
 Holding one connection open (instead of polling) matters on this hardware. A TLS handshake keeps the Pico busy for a noticeable moment, so polling every few seconds makes animations hitch.
 
+
+## Adding a Galactic Unicorn
+
+The cloud and launcher handle a Galactic Unicorn (53×11) alongside the Stellar (16×16). One Worker, one token and one connector serve both: the Galactic checks in at `/board/sync?board=galactic`, has its own command queue, and every connector tool takes an optional `board` (`stellar`, the default, or `galactic`). `get_programming_guide` with `board: "galactic"` describes the wide screen, and `get_board_status` lists the other board in a line.
+
+Setup, with the Galactic plugged in over USB and Thonny open (interpreter: *MicroPython (Raspberry Pi Pico)*):
+
+1. Make a folder with `board/main.py`, `board/boot.py`, `board/_wd.py`, your `board/secrets.py` (the same Wi-Fi works) and the same `board/_cloud.json` as the Stellar. Add programs from `board/galactic/programs/`.
+2. In Thonny's Files pane, select them all and choose *Upload to /*. Back up the board's original `main.py` first if you want to keep Pimoroni's demo launcher.
+3. Unplug and replug. The board joins Wi-Fi, scrolls its IP address, and checks in; ask Claude "what's on my Galactic?".
+
+`main.py` is the same file on both boards (v6.3). On the Galactic its web page is at `http://galactic.local/`. Galactic programs import `from galactic import GalacticUnicorn` for button names and should use `su.WIDTH` / `su.HEIGHT`.
+
 ## Repository layout
 
 ```

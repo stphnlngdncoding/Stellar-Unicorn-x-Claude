@@ -5,6 +5,12 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.3.0: Galactic Unicorn support (2026-11-05)
+
+- **One launcher for both boards.** `board/main.py` checks whether it's on Stellar (16×16) or Galactic (53×11) firmware and sizes its spinner, messages and warnings to fit. On the Galactic it uses the hostname `galactic` and checks in at `/board/sync?board=galactic`. Status reports `model` and `size`.
+- **The Worker handles two boards** (connector v1.1): each has its own Durable Object, so its own queue and status; the Stellar keeps its existing one. Every tool takes an optional `board` (default `stellar`, so nothing changes for existing chats and the Remote); `get_programming_guide` has a Galactic version; `get_board_status` mentions the other board. Same token and secret, no new setup in Cloudflare or claude.ai.
+- The Stellar stays on v6.1.3 for now; v6.3.0 runs on it too.
+
 ## v6.2.4 / v6.1.3: full brightness at start-up (2026-11-03)
 
 - The board starts at full brightness instead of 50%. The brightness buttons, the Remote and Claude can still dim it until the next restart.
