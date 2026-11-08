@@ -20,7 +20,7 @@ import APP_HTML from "./app/index.html";
 import { ICON_180, ICON_512 } from "./app/icons.js";
 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const RESULT_WAIT_MS = 20000;
+const RESULT_WAIT_MS = 35000;   // a busy board (a heavy program on the Galactic) can take ~20 s to answer
 const ONLINE_WINDOW_MS = 20000;
 const MAX_QUEUE = 20;
 const POLL_SECONDS = 3;

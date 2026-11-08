@@ -5,6 +5,11 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.3.4: Soft Plasma, and Settings that wait for a busy board (2026-11-07)
+
+- **Soft Plasma** (both boards, Ambient): a dim, low-contrast plasma in a narrow band of colour, mirrored left to right and top to bottom so it breathes out from the middle. Only a quarter of the board is worked out each frame, so it's light on the Galactic too. Settings: wave speed, stretch, brightness, contrast, how much of the rainbow shows, colour strength, colour drift.
+- **Settings no longer spins forever then errors on a busy board.** With the original Plasma playing, the Galactic sometimes took about 20 seconds to answer, right at the cloud's 20-second limit. The cloud now waits up to 35 seconds, and the Remote tries the read again by itself (it says the board is busy while it does).
+
 ## v6.3.3: the cloud no longer burns through Cloudflare's free tier (2026-11-05)
 
 - **Cloud only; boards need no update.** Each board keeps a check-in open for 50 seconds at a time, and the Durable Object was awake for all of it, which cost about 83% of the free daily duration limit per board. Two boards went over it. The wait now lives in the Worker: the Durable Object sleeps on a hibernating WebSocket and only wakes for a check-in or a command. Commands still reach a held check-in immediately.

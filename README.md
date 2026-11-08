@@ -56,7 +56,7 @@ To have the Worker update itself, connect it to your copy of this repo in the Cl
 
 ## Example programs
 
-`board/programs/` has ready-made programs: Game of Life (plus Life v2: shattering still lifes and spaceship fleets; Mirror Life and the super-slow Slow Life), kaleidoscope, plasma, lava lamp, silk tides, neon tunnel, driftfield, fractal, warp, liquid metal, water jet, sand, garden, goo, morph, fireflies, ant farm, starfall, a spaceship dodging asteroids past planets (and the odd flying saucer), a sailboat in sun and storms, a meadow that follows your real sun, moon and weather, and self-playing Tetris, Snake and Hedge Maze. Programs use a simple `setup()` / `frame()` contract; see [writing programs](GUIDE.md#writing-programs).
+`board/programs/` has ready-made programs: Game of Life (plus Life v2: shattering still lifes and spaceship fleets; Mirror Life and the super-slow Slow Life), kaleidoscope, plasma (and a dim, mirrored Soft Plasma), lava lamp, silk tides, neon tunnel, driftfield, fractal, warp, liquid metal, water jet, sand, garden, goo, morph, fireflies, ant farm, starfall, a spaceship dodging asteroids past planets (and the odd flying saucer), a sailboat in sun and storms, a meadow that follows your real sun, moon and weather, and self-playing Tetris, Snake and Hedge Maze. Programs use a simple `setup()` / `frame()` contract; see [writing programs](GUIDE.md#writing-programs).
 
 ## More
 
