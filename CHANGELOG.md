@@ -5,6 +5,10 @@ shipped; `main` is always the latest release. The major number matches the
 launcher's `VERSION` in `board/main.py`, which the board also reports in its status.
 See "Versions and rolling back" in the README.
 
+## v6.3.5: lights out at night (2026-11-21)
+
+- **Cloud only; boards need no update.** Every day at 8 pm Pacific both boards stop (whatever was playing is remembered), and at 5 am it starts again. A board that's offline at 8 pm goes dark when it next checks in; the 5 am "on" cancels any lights-out a board never got. Change the hours with `NIGHT_OFF`, `NIGHT_ON` and `NIGHT_TZ` at the top of `cloud/src/worker.js` (`NIGHT_OFF = -1` turns it off). A board that restarts in the night (a power blip) comes back playing its power-on program.
+
 ## v6.3.4: Soft Plasma, and Settings that wait for a busy board (2026-11-07)
 
 - **Soft Plasma** (both boards, Ambient): a dim, low-contrast plasma in a narrow band of colour, mirrored left to right and top to bottom so it breathes out from the middle. Only a quarter of the board is worked out each frame, so it's light on the Galactic too. Settings: wave speed, stretch, brightness, contrast, how much of the rainbow shows, colour strength, colour drift.

@@ -23,6 +23,13 @@ const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const RESULT_WAIT_MS = 35000;   // a busy board (a heavy program on the Galactic) can take ~20 s to answer
 const ONLINE_WINDOW_MS = 20000;
 const MAX_QUEUE = 20;
+// Night schedule: every board goes dark at NIGHT_OFF and comes back at NIGHT_ON
+// (hours, local time in NIGHT_TZ). Set NIGHT_OFF to -1 to turn it off.
+// The cron triggers in wrangler.toml fire at both UTC hours each could fall on
+// (daylight saving moves them); the handler only acts when the local hour matches.
+const NIGHT_OFF = 20;
+const NIGHT_ON = 5;
+const NIGHT_TZ = "America/Los_Angeles";
 const POLL_SECONDS = 3;
 const MAX_HOLD_MS = 50000;   // long-poll: hold an idle board check-in this long
 const CLOSE_REPLACED = 4000; // WebSocket close code: a newer check-in took over
@@ -231,6 +238,7 @@ export class Board {
     if (url.pathname === "/take") return Response.json({ commands: await this.take() });
     if (url.pathname === "/command") return this.command(await request.json());
     if (url.pathname === "/status") return Response.json(await this.status());
+    if (url.pathname === "/night") return Response.json(await this.night((await request.json()).on));
     return new Response("not found", { status: 404 });
   }
 
@@ -281,6 +289,26 @@ export class Board {
     for (const ws of this.state.getWebSockets()) {
       try { ws.send("wake"); } catch (e) {}
     }
+  }
+
+  // Lights out (on=false) or back on (on=true). Queued like any command, without
+  // waiting for an answer: an offline board picks it up when it next checks in,
+  // and the morning one cancels a "lights out" the board never got.
+  async night(on) {
+    let queue = ((await this.state.storage.get("queue")) || []).filter((c) => !c.night);
+    const s = (await this.state.storage.get("status")) || {};
+    if (!on) {
+      if (s.running) await this.state.storage.put("night_back", s.running);
+      queue.push({ id: crypto.randomUUID(), type: "stop", night: true });
+    } else {
+      const back = (await this.state.storage.get("night_back")) || s.default;
+      await this.state.storage.delete("night_back");
+      if (back) queue.push({ id: crypto.randomUUID(), type: "run", name: back, night: true });
+    }
+    while (queue.length > MAX_QUEUE) queue.shift();
+    await this.state.storage.put("queue", queue);
+    this.wake();
+    return { queued: queue.length };
   }
 
   async take(touch = true) {
@@ -538,7 +566,24 @@ async function waitForCommands(stub, ms) {
   return (await took.json()).commands;
 }
 
+function localHour(tz, when) {
+  const h = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(when);
+  return parseInt(h, 10);
+}
+
 export default {
+  // the night schedule (cron triggers in wrangler.toml)
+  async scheduled(event, env, ctx) {
+    if (NIGHT_OFF < 0) return;
+    const h = localHour(NIGHT_TZ, new Date(event.scheduledTime));
+    const on = h === NIGHT_ON ? true : h === NIGHT_OFF ? false : null;
+    if (on === null) return;
+    for (const b of BOARD_NAMES) {
+      const stub = env.BOARD.get(env.BOARD.idFromName(BOARDS[b].object));
+      ctx.waitUntil(stub.fetch("https://board/night", { method: "POST", body: JSON.stringify({ on }) }));
+    }
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     const stubFor = (board) => env.BOARD.get(env.BOARD.idFromName(BOARDS[board].object));
