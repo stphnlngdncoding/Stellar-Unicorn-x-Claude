@@ -299,10 +299,16 @@ export class Board {
     const s = (await this.state.storage.get("status")) || {};
     if (!on) {
       if (s.running) await this.state.storage.put("night_back", s.running);
+      if (s.brightness > 0) await this.state.storage.put("night_bright", s.brightness);
+      // brightness 0 as well as stop: older launchers leave the last picture lit when stopped
       queue.push({ id: crypto.randomUUID(), type: "stop", night: true });
+      queue.push({ id: crypto.randomUUID(), type: "brightness", value: 0, night: true });
     } else {
       const back = (await this.state.storage.get("night_back")) || s.default;
+      const bright = (await this.state.storage.get("night_bright")) || 1;
       await this.state.storage.delete("night_back");
+      await this.state.storage.delete("night_bright");
+      queue.push({ id: crypto.randomUUID(), type: "brightness", value: bright, night: true });
       if (back) queue.push({ id: crypto.randomUUID(), type: "run", name: back, night: true });
     }
     while (queue.length > MAX_QUEUE) queue.shift();
